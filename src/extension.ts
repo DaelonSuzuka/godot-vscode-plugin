@@ -10,6 +10,7 @@ import {
 	GDDocumentationProvider,
 	GDDefinitionProvider,
 	GDTaskProvider,
+	GDColorProvider,
 } from "./providers";
 import { ClientConnectionManager } from "./lsp";
 import { ScenePreviewProvider } from "./scene_tools";
@@ -37,6 +38,7 @@ interface Extension {
 	hoverProvider?: GDHoverProvider;
 	inlayProvider?: GDInlayHintsProvider;
 	formattingProvider?: FormattingProvider;
+	colorProvider?: GDColorProvider;
 	docsProvider?: GDDocumentationProvider;
 	definitionProvider?: GDDefinitionProvider;
 	semanticTokensProvider?: GDSemanticTokensProvider;
@@ -59,6 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
 	globals.formattingProvider = new FormattingProvider(context);
 	globals.docsProvider = new GDDocumentationProvider(context);
 	globals.definitionProvider = new GDDefinitionProvider(context);
+	globals.colorProvider = new GDColorProvider(context);
 	// globals.semanticTokensProvider = new GDSemanticTokensProvider(context);
 	// globals.completionProvider = new GDCompletionItemProvider(context);
 	// globals.tasksProvider = new GDTaskProvider(context);
