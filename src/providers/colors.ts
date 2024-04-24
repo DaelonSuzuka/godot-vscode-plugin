@@ -55,8 +55,11 @@ class ColorParseResult {
 	public b: number;
 	public g: number;
 	public a: number;
+	public h: number;
+	public s: number;
+	public v: number;
 
-	constructor(text: string) {
+	constructor(public text: string) {
 		const parts = text.match(/(Color|Color8|ColorN|Color\.\w+)?\((.*)\)/);
 		this.func = parts[1];
 		this.args = parts[2].split(",");
@@ -89,12 +92,23 @@ class ColorParseResult {
 			if (this.args.length === 4) {
 				this.a = convert_8bit_to_float(parseInt(this.args[3]));
 			}
+		} else if (this.func === "Color.from_hsv") {
+			this.format = "HSV";
+			this.h = parseFloat(this.args[0]);
+			this.s = parseFloat(this.args[1]);
+			this.v = parseFloat(this.args[2]);
+			// if (this.args.length === 4) {
+			// 	this.a = convert_8bit_to_float(parseInt(this.args[3]));
+			// }
 		}
 	}
 
 	to_color() {
 		if (this.r !== undefined && this.g !== undefined && this.b !== undefined) {
 			return new Color(this.r, this.g, this.b, this.a ?? 1);
+		}
+		if (this.h !== undefined && this.s !== undefined && this.v !== undefined) {
+			// return new Color(this.r, this.g, this.b, this.a ?? 1);
 		}
 		return null;
 	}
@@ -160,10 +174,23 @@ export class GDColorProvider implements DocumentColorProvider {
 					output += `, ${convert_float_to_8bit(color.alpha)}`;
 				}
 				output += ")";
+				break;
+			}
+			case "HSV": {
+				log.debug("HSV not supported yet");
+				// output = "Color.from_hsv(";
+				// output += `${color.red}`;
+				// output += `, ${color.green}`;
+				// output += `, ${color.blue}`;
+				// if (original.a || color.alpha !== 1) {
+				// 	output += `, ${convert_float_to_8bit(color.alpha)}`;
+				// }
+				// output += ")";
+				break;
 			}
 		}
 
-		const presentation = new ColorPresentation("RGBA");
+		const presentation = new ColorPresentation(original.format);
 		presentation.textEdit = TextEdit.replace(context.range, output);
 
 		return [presentation];
@@ -177,12 +204,12 @@ export class GDColorProvider implements DocumentColorProvider {
 		const matches = text.matchAll(/(Color|Color8|ColorN|Color\.\w+)?\(([^\)]*)\)/g);
 
 		for (const match of matches) {
-			const start = document.positionAt(match.index);
-			const end = document.positionAt(match.index + match[0].length);
-			const r = new Range(start, end);
 			const color = parse_color(match[0]);
 
 			if (color) {
+				const start = document.positionAt(match.index);
+				const end = document.positionAt(match.index + match[0].length);
+				const r = new Range(start, end);
 				colors.push(new ColorInformation(r, color));
 			}
 		}
