@@ -174,7 +174,7 @@ export class GDColorProvider implements DocumentColorProvider {
 
 		const colors: ColorInformation[] = [];
 
-		const matches = text.matchAll(/(Color|Color8|ColorN)(\.\w+)?\(.*\)/g);
+		const matches = text.matchAll(/(Color|Color8|ColorN|Color\.\w+)?\(([^\)]*)\)/g);
 
 		for (const match of matches) {
 			const start = document.positionAt(match.index);
