@@ -824,6 +824,7 @@
 		}
 	},
 	"devDependencies": {
+		"@lezer/generator": "^1.7.0",
 		"@types/chai": "^4.3.11",
 		"@types/marked": "^4.0.8",
 		"@types/mocha": "^10.0.6",
@@ -847,6 +848,9 @@
 		"typescript": "^5.2.2"
 	},
 	"dependencies": {
+		"@gdquest/lezer-gdscript": "^0.1.2",
+		"@lezer/highlight": "^1.2.0",
+		"@lezer/lr": "^1.4.0",
 		"@vscode/debugadapter": "^1.64.0",
 		"@vscode/debugprotocol": "^1.64.0",
 		"await-notify": "^1.0.1",
