@@ -251,6 +251,11 @@
 			"type": "object",
 			"title": "Godot Tools",
 			"properties": {
+				"godotTools.projectFilePath": {
+					"type": "string",
+					"default": "",
+					"description": "Path to project.godot"
+				},
 				"godotTools.editorPath.godot3": {
 					"type": "string",
 					"default": "godot3",

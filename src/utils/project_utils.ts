@@ -3,15 +3,33 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { execSync } from "node:child_process";
+import { get_configuration } from "./vscode_utils";
 
 let projectDir: string | undefined = undefined;
 let projectFile: string | undefined = undefined;
 
 export async function get_project_dir(): Promise<string | undefined> {
 	let file = "";
-	if (vscode.workspace.workspaceFolders !== undefined) {
-		const files = await vscode.workspace.findFiles("**/project.godot", null);
 
+	console.log("get_project_dir");
+
+	if (vscode.workspace.workspaceFolders === undefined) {
+		projectFile = undefined;
+		projectDir = undefined;
+		return projectDir;
+	}
+
+	const path = get_configuration("projectFilePath");
+	console.log("projectFilePath", path);
+	if (path) {
+		console.log("project file specified", path);
+		file = path;
+		if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+			console.log("project file didn't exist");
+			return undefined;
+		}
+	} else {
+		const files = await vscode.workspace.findFiles("**/project.godot", null);
 		if (files.length === 0) {
 			return undefined;
 		}
@@ -31,6 +49,7 @@ export async function get_project_dir(): Promise<string | undefined> {
 			}
 		}
 	}
+
 	projectFile = file;
 	projectDir = path.dirname(file);
 	return projectDir;
