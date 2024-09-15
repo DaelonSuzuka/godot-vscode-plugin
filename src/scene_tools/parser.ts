@@ -88,9 +88,28 @@ export class SceneParser {
 		for (const match of text.matchAll(nodeRegex)) {
 			const line = match[0];
 			const name = line.match(/name="([\w]+)"/)?.[1];
-			const type = line.match(/type="([\w]+)"/)?.[1] ?? "PackedScene";
+			let type = line.match(/type="([\w]+)"/)?.[1];
 			let parent = line.match(/parent="([\w\/.]+)"/)?.[1];
 			const instance = line.match(/instance=ExtResource\(\s*"?([\w]+)"?\s*\)/)?.[1];
+			const index = line.match(/index="([\w]+)"/)?.[1];
+
+			if (instance) {
+				const extRes = scene.externalResources[instance];
+				if (extRes.path.endsWith("tscn")) {
+					// TODO: parse external scene? possibly very expensive...
+					// would be nice to retrieve the root node type of the
+					// external scene
+					type = scene.externalResources[instance].type;
+				}
+				if (extRes.path.endsWith("glb")) {
+					type = "GLB_Scene";
+				}
+			}
+
+			if (index) {
+				// TODO: editable children of external scenes have an index
+				// rendering these nodes usefully might require parsing all external scenes...
+			}
 
 			// leaving this in case we have a reason to use these node paths in the future
 			// const rawNodePaths = line.match(/node_paths=PackedStringArray\(([\w",\s]*)\)/)?.[1];
