@@ -1,9 +1,9 @@
 import {
 	TreeItem,
-	TreeItemCollapsibleState,
+	type TreeItemCollapsibleState,
 	MarkdownString,
 } from "vscode";
-import * as path from "path";
+import * as path from "node:path";
 import { get_extension_uri } from "../utils";
 
 const iconDir = get_extension_uri("resources", "godot_icons").fsPath;
@@ -16,9 +16,9 @@ export class SceneNode extends TreeItem {
 	public text: string;
 	public position: number;
 	public body: string;
-	public unique: boolean = false;
-	public hasScript: boolean = false;
-	public scriptId: string = "";
+	public unique = false;
+	public hasScript = false;
+	public scriptId = "";
 	public children: SceneNode[] = [];
 
 	constructor(
@@ -28,7 +28,7 @@ export class SceneNode extends TreeItem {
 	) {
 		super(label, collapsibleState);
 
-		const iconName = className + ".svg";
+		const iconName = `${className}.svg`;
 
 		this.iconPath = {
 			light: path.join(iconDir, "light", iconName),
@@ -52,7 +52,7 @@ export class SceneNode extends TreeItem {
 				this.scriptId = line.match(/script = ExtResource\(\s*"?([\w]+)"?\s*\)/)[1];
 				this.contextValue += "hasScript";
 			}
-			if (line != "") {
+			if (line !== "") {
 				newLines.push(line);
 			}
 		}

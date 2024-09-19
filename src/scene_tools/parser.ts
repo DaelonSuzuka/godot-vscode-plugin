@@ -1,8 +1,8 @@
-import { TextDocument, Uri } from "vscode";
-import { basename, extname } from "path";
-import * as fs from "fs";
+import { type TextDocument, Uri, workspace } from "vscode";
+import { basename, extname } from "node:path";
+import * as fs from "node:fs";
 import { SceneNode, Scene } from "./types";
-import { createLogger } from "../utils";
+import { convert_resource_path_to_uri, createLogger } from "../utils";
 
 const log = createLogger("scenes.parser");
 
@@ -18,7 +18,7 @@ export class SceneParser {
 		SceneParser.instance = this;
 	}
 
-	public parse_scene(document: TextDocument) {
+	public async parse_scene(document: TextDocument) {
 		const path = document.uri.fsPath;
 		const stats = fs.statSync(path);
 
@@ -42,30 +42,36 @@ export class SceneParser {
 		for (const match of text.matchAll(/\[ext_resource.*/g)) {
 			const line = match[0];
 			const type = line.match(/type="([\w]+)"/)?.[1];
-			const path = line.match(/path="([\w.:/]+)"/)?.[1];
+			const extPath = line.match(/path="([\w.:/]+)"/)?.[1];
 			const uid = line.match(/uid="([\w:/]+)"/)?.[1];
 			const id = line.match(/ id="?([\w]+)"?/)?.[1];
 
 			scene.externalResources[id] = {
 				body: line,
-				path: path,
+				path: extPath,
 				type: type,
 				uid: uid,
 				id: id,
 				index: match.index,
 				line: document.lineAt(document.positionAt(match.index)).lineNumber + 1,
 			};
+
+			if (extPath.endsWith("tscn") && path !== extPath) {
+				const uri = await convert_resource_path_to_uri(extPath);
+				const doc = await workspace.openTextDocument(uri);
+				await this.parse_scene(doc);
+			}
 		}
 
 		let lastResource = null;
 		for (const match of text.matchAll(/\[sub_resource.*/g)) {
 			const line = match[0];
 			const type = line.match(/type="([\w]+)"/)?.[1];
-			const path = line.match(/path="([\w.:/]+)"/)?.[1];
+			const subPath = line.match(/path="([\w.:/]+)"/)?.[1];
 			const uid = line.match(/uid="([\w:/]+)"/)?.[1];
 			const id = line.match(/ id="?([\w]+)"?/)?.[1];
 			const resource = {
-				path: path,
+				path: subPath,
 				type: type,
 				uid: uid,
 				id: id,
@@ -96,10 +102,11 @@ export class SceneParser {
 			if (instance) {
 				const extRes = scene.externalResources[instance];
 				if (extRes.path.endsWith("tscn")) {
-					// TODO: parse external scene? possibly very expensive...
-					// would be nice to retrieve the root node type of the
-					// external scene
-					type = scene.externalResources[instance].type;
+					const uri = await convert_resource_path_to_uri(extRes.path);
+					const extScene = this.scenes.get(uri.fsPath);
+					log.info(extRes);
+					log.info(extScene);
+					type = extScene.root.description;
 				}
 				if (extRes.path.endsWith("glb")) {
 					type = "GLB_Scene";

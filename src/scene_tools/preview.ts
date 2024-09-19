@@ -154,7 +154,7 @@ export class ScenePreviewProvider
 				this.refresh();
 			} else {
 				const document = await vscode.workspace.openTextDocument(uri);
-				this.parser.parse_scene(document);
+				await this.parser.parse_scene(document);
 			}
 		}, 20);
 	}
@@ -197,7 +197,7 @@ export class ScenePreviewProvider
 			}
 
 			const document = await vscode.workspace.openTextDocument(fileName);
-			this.scene = this.parser.parse_scene(document);
+			this.scene = await this.parser.parse_scene(document);
 
 			this.tree.message = this.scene.title;
 			this.currentScene = fileName;
