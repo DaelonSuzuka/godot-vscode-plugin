@@ -2,7 +2,7 @@ import { type TextDocument, Uri, workspace } from "vscode";
 import { basename, extname } from "node:path";
 import * as fs from "node:fs";
 import { SceneNode, Scene } from "./types";
-import { convert_resource_path_to_uri, createLogger } from "../utils";
+import { convert_resource_path, convert_resource_path_to_uri, createLogger } from "../utils";
 
 const log = createLogger("scenes.parser");
 
@@ -46,7 +46,7 @@ export class SceneParser {
 			const uid = line.match(/uid="([\w:/]+)"/)?.[1];
 			const id = line.match(/ id="?([\w]+)"?/)?.[1];
 
-			scene.externalResources[id] = {
+			scene.externalResources.set(id, {
 				body: line,
 				path: extPath,
 				type: type,
@@ -54,7 +54,7 @@ export class SceneParser {
 				id: id,
 				index: match.index,
 				line: document.lineAt(document.positionAt(match.index)).lineNumber + 1,
-			};
+			});
 
 			if (extPath.endsWith("tscn") && path !== extPath) {
 				const uri = await convert_resource_path_to_uri(extPath);
@@ -69,7 +69,7 @@ export class SceneParser {
 			const type = line.match(/type="([\w]+)"/)?.[1];
 			const subPath = line.match(/path="([\w.:/]+)"/)?.[1];
 			const uid = line.match(/uid="([\w:/]+)"/)?.[1];
-			const id = line.match(/ id="?([\w]+)"?/)?.[1];
+			const id = line.match(/id="?([\w]+)"?/)?.[1];
 			const resource = {
 				path: subPath,
 				type: type,
@@ -82,7 +82,7 @@ export class SceneParser {
 				lastResource.body = text.slice(lastResource.index, match.index).trimEnd();
 			}
 
-			scene.subResources[id] = resource;
+			scene.subResources.set(id, resource);
 			lastResource = resource;
 		}
 
@@ -90,8 +90,7 @@ export class SceneParser {
 		const nodes = {};
 		let lastNode = null;
 
-		const nodeRegex = /\[node.*/g;
-		for (const match of text.matchAll(nodeRegex)) {
+		for (const match of text.matchAll(/\[node.*/g)) {
 			const line = match[0];
 			const name = line.match(/name="([\w]+)"/)?.[1];
 			let type = line.match(/type="([\w]+)"/)?.[1];
@@ -99,17 +98,25 @@ export class SceneParser {
 			const instance = line.match(/instance=ExtResource\(\s*"?([\w]+)"?\s*\)/)?.[1];
 			const index = line.match(/index="([\w]+)"/)?.[1];
 
+			let description = type;
+
+			const node = new SceneNode(name);
+
 			if (instance) {
-				const extRes = scene.externalResources[instance];
+				const extRes = scene.externalResources.get(instance);
 				if (extRes.path.endsWith("tscn")) {
-					const uri = await convert_resource_path_to_uri(extRes.path);
-					const extScene = this.scenes.get(uri.fsPath);
-					log.info(extRes);
-					log.info(extScene);
-					type = extScene.root.description;
+					const filePath = await convert_resource_path(extRes.path);
+					const extScene = this.scenes.get(filePath);
+					type = extScene.root.description as string;
+					description = `${type} (PackedScene)`;
 				}
 				if (extRes.path.endsWith("glb")) {
-					type = "GLB_Scene";
+					type = "Node3D";
+					description = `${type} (GLB)`;
+				}
+				if (extRes.path.endsWith("gltf")) {
+					type = "Node3D";
+					description = `${type} (GLTF)`;
 				}
 			}
 
@@ -146,9 +153,9 @@ export class SceneParser {
 				lastResource = null;
 			}
 
-			const node = new SceneNode(name, type);
+			node.set_icon(type);
 			node.path = _path;
-			node.description = type;
+			node.description = description;
 			node.relativePath = relativePath;
 			node.parent = parent;
 			node.text = match[0];
@@ -160,9 +167,10 @@ export class SceneParser {
 			scene.nodes.set(_path, node);
 
 			if (instance) {
-				if (instance in scene.externalResources) {
-					node.tooltip = scene.externalResources[instance].path;
-					node.resourcePath = scene.externalResources[instance].path;
+				if ( scene.externalResources.has(instance)) {
+					const resource = scene.externalResources.get(instance);
+					node.tooltip = resource.path;
+					node.resourcePath = resource.path;
 					if ([".tscn"].includes(extname(node.resourcePath))) {
 						node.contextValue += "openable";
 					}

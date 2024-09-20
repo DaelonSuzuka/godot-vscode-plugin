@@ -96,9 +96,14 @@ export function find_project_file(start: string, depth = 20) {
 	return find_project_file(folder, depth - 1);
 }
 
-export async function convert_resource_path_to_uri(resPath: string): Promise<vscode.Uri | null> {
+export async function convert_resource_path(resPath: string): Promise<string | null> {
 	const dir = await get_project_dir();
-	return vscode.Uri.joinPath(vscode.Uri.file(dir), resPath.substring("res://".length));
+	return path.join(dir, resPath.substring("res://".length));
+}
+
+export async function convert_resource_path_to_uri(resPath: string): Promise<vscode.Uri | null> {
+	const path = await convert_resource_path(resPath);
+	return vscode.Uri.file(path);
 }
 
 type VERIFY_STATUS = "SUCCESS" | "WRONG_VERSION" | "INVALID_EXE";

@@ -1,8 +1,4 @@
-import {
-	TreeItem,
-	type TreeItemCollapsibleState,
-	MarkdownString,
-} from "vscode";
+import { TreeItem, type TreeItemCollapsibleState, MarkdownString } from "vscode";
 import * as path from "node:path";
 import { get_extension_uri } from "../utils";
 
@@ -23,11 +19,12 @@ export class SceneNode extends TreeItem {
 
 	constructor(
 		public label: string,
-		public className: string,
-		public collapsibleState?: TreeItemCollapsibleState
+		public collapsibleState?: TreeItemCollapsibleState,
 	) {
 		super(label, collapsibleState);
+	}
 
+	public set_icon(className: string) {
 		const iconName = `${className}.svg`;
 
 		this.iconPath = {
@@ -78,7 +75,7 @@ export class Scene {
 	public title: string;
 	public mtime: number;
 	public root: SceneNode | undefined;
-	public externalResources: {[key: string]: GDResource} = {};
-	public subResources: {[key: string]: GDResource} = {};
+	public externalResources: Map<string, GDResource> = new Map();
+	public subResources: Map<string, GDResource> = new Map();
 	public nodes: Map<string, SceneNode> = new Map();
 }
