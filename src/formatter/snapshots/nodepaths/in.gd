@@ -11,6 +11,14 @@ func f():
 
 @onready var score := $HBoxContainer/Score   as   Label
 
+var a = $/root
+var a = $ / root
+var a = $/root/Child
+var a = $ /  root /   Child
+var a = $/root/Child/%Unique
+var a = $ /  root /   Child/%Unique
+var a = $/root/Child/GrandChild
+
 var a = $Child
 var a = $Child/   GrandChild
 var a = $Child/   GrandChild  /   GreatGrandChild
@@ -36,6 +44,9 @@ var a = $Child/%Unique/ChildOfUnique
 var a = %Unique
 var a = %Unique/Child
 var a = %Unique/%UniqueChild
+var a = %"Unique"
+var a = %'Unique/Child'
+var a = %'Unique/%UniqueChild'
 
 var a = $"%Unique"
 var a = get_node("%Unique")
@@ -69,3 +80,6 @@ var a = $"%Child/GrandChild".some_method()
 var a = $Child.get_node('GrandChild').some_method()
 var a = $"Child".get_node('GrandChild').some_method()
 var a = $"%Child".get_node('GrandChild').some_method()
+
+func f():
+	$Child.add_child(%Unique)
