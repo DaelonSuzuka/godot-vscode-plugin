@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as vsctm from "vscode-textmate";
 import * as oniguruma from "vscode-oniguruma";
 import { keywords, symbols } from "./symbols";
-import { get_configuration, get_extension_uri, createLogger } from "../utils";
+import { get_configuration, get_extension_uri, createLogger, is_debug_mode } from "../utils";
 
 const log = createLogger("formatter.tm");
 
@@ -50,10 +50,11 @@ interface Token {
 	param?: boolean;
 	string?: boolean;
 	skip?: boolean;
+	identifier?: boolean;
 }
 
 export interface FormatterOptions {
-	maxEmptyLines: 1 | 2;
+	maxEmptyLines: 0 | 1 | 2;
 	denseFunctionParameters: boolean;
 }
 
@@ -72,6 +73,13 @@ function parse_token(token: Token) {
 	}
 	if (token.scopes.includes("meta.function.parameters.gdscript")) {
 		token.param = true;
+	}
+	if (token.scopes[0].includes("constant.numeric")) {
+		token.type = "literal";
+		return;
+	}
+	if (token.value.match(/[A-Za-z_]\w+/)) {
+		token.identifier = true;
 	}
 	if (token.scopes.includes("meta.literal.nodepath.gdscript")) {
 		token.skip = true;
@@ -111,6 +119,10 @@ function parse_token(token: Token) {
 		token.type = "variable";
 		return;
 	}
+	if (token.scopes.includes("comment.line.number-sign.gdscript")) {
+		token.type = "comment";
+		return;
+	}
 }
 
 function between(tokens: Token[], current: number, options: FormatterOptions) {
@@ -128,12 +140,17 @@ function between(tokens: Token[], current: number, options: FormatterOptions) {
 	if (prevToken.skip && nextToken.skip) return "";
 
 	if (prev === "(") return "";
+	if (prev === ".") {
+		if (nextToken?.type === "symbol") return " ";
+		return "";
+	}
+	if (next === ".") return "";
 
 	if (nextToken.param) {
 		if (options.denseFunctionParameters) {
-			if (prev === "-") {
+			if (prev === "-" || prev === "+") {
 				if (tokens[current - 2]?.value === "=") return "";
-				if (["keyword", "symbol"].includes(tokens[current - 2].type)) {
+				if (["keyword", "symbol"].includes(tokens[current - 2]?.type)) {
 					return "";
 				}
 				if ([",", "("].includes(tokens[current - 2]?.value)) {
@@ -168,8 +185,11 @@ function between(tokens: Token[], current: number, options: FormatterOptions) {
 	}
 	if (prev === "@") return "";
 
-	if (prev === "-") {
-		if (["keyword", "symbol"].includes(tokens[current - 2].type)) {
+	if (prev === "-" || prev === "+") {
+		if (nextToken.identifier) return " ";
+		if (next === "(") return " ";
+		if (current === 1) return "";
+		if (["keyword", "symbol"].includes(tokens[current - 2]?.type)) {
 			return "";
 		}
 		if ([",", "(", "["].includes(tokens[current - 2]?.value)) {
@@ -232,6 +252,7 @@ export function format_document(document: TextDocument, _options?: FormatterOpti
 
 	const options = _options ?? get_formatter_options();
 
+	let lastToken = null;
 	let lineTokens: vsctm.ITokenizeLineResult = null;
 	let onlyEmptyLinesSoFar = true;
 	let emptyLineCount = 0;
@@ -259,7 +280,11 @@ export function format_document(document: TextDocument, _options?: FormatterOpti
 
 		// delete consecutive empty lines
 		if (emptyLineCount) {
-			for (let i = emptyLineCount - options.maxEmptyLines; i > 0; i--) {
+			let maxEmptyLines = options.maxEmptyLines;
+			if (lastToken === ":") {
+				maxEmptyLines = 0;
+			}
+			for (let i = emptyLineCount - maxEmptyLines; i > 0; i--) {
 				edits.push(TextEdit.delete(document.lineAt(lineNum - i).rangeIncludingLineBreak));
 			}
 			emptyLineCount = 0;
@@ -284,7 +309,7 @@ export function format_document(document: TextDocument, _options?: FormatterOpti
 		const tokens: Token[] = [];
 		for (const t of lineTokens.tokens) {
 			const token: Token = {
-				scopes: t.scopes,
+				scopes: [t.scopes.join(" "), ...t.scopes],
 				original: line.text.slice(t.startIndex, t.endIndex),
 				value: line.text.slice(t.startIndex, t.endIndex).trim(),
 			};
@@ -296,11 +321,18 @@ export function format_document(document: TextDocument, _options?: FormatterOpti
 			tokens.push(token);
 		}
 		for (let i = 0; i < tokens.length; i++) {
-			log.debug(i, tokens[i].value, tokens[i]);
-			if (i > 0 && tokens[i - 1].string === true && tokens[i].string === true) {
+			if (is_debug_mode()) log.debug(i, tokens[i].value, tokens[i]);
+
+			if (i === 0 && tokens[i].string) {
+				// leading whitespace is already accounted for
+				nextLine += tokens[i].original.trimStart();
+			} else if (i > 0 && tokens[i - 1].string && tokens[i].string) {
 				nextLine += tokens[i].original;
 			} else {
 				nextLine += between(tokens, i, options) + tokens[i].value.trim();
+			}
+			if (tokens[i].type !== "comment") {
+				lastToken = tokens[i].value;
 			}
 		}
 

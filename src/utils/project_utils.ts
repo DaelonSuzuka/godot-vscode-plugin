@@ -33,6 +33,10 @@ export async function get_project_dir(): Promise<string | undefined> {
 	}
 	projectFile = file;
 	projectDir = path.dirname(file);
+    if (os.platform() === "win32") {
+        // capitalize the drive letter in windows absolute paths
+        projectDir = projectDir[0].toUpperCase() + projectDir.slice(1);
+    }
 	return projectDir;
 }
 
@@ -106,8 +110,8 @@ export async function convert_resource_path_to_uri(resPath: string): Promise<vsc
 	return vscode.Uri.file(path);
 }
 
-type VERIFY_STATUS = "SUCCESS" | "WRONG_VERSION" | "INVALID_EXE";
-type VERIFY_RESULT = {
+export type VERIFY_STATUS = "SUCCESS" | "WRONG_VERSION" | "INVALID_EXE";
+export type VERIFY_RESULT = {
 	status: VERIFY_STATUS;
 	godotPath: string;
 	version?: string;
