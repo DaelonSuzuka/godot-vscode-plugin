@@ -3,9 +3,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-export * from "./logger";
 export * from "./godot_utils";
+export * from "./logger";
+export * from "./prompts";
 export * from "./settings_updater";
+export * from "./subspawn";
 export * from "./vscode_utils";
 
 export function is_debug_mode(): boolean {
