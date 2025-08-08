@@ -5,5 +5,6 @@ export * from "./document_link";
 export * from "./documentation";
 export * from "./hover";
 export * from "./inlay_hints";
+export * from "./project_picker";
 export * from "./semantic_tokens";
 export * from "./tasks";
