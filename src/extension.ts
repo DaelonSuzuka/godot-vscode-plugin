@@ -1,73 +1,70 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { attemptSettingsUpdate, get_extension_uri, clean_godot_path } from "./utils";
-import {
-	GDInlayHintsProvider,
-	GDHoverProvider,
-	GDDocumentDropEditProvider,
-	GDDocumentLinkProvider,
-	GDSemanticTokensProvider,
-	GDCompletionItemProvider,
-	GDDocumentationProvider,
-	GDDefinitionProvider,
-	GDTaskProvider,
-} from "./providers";
-import { ClientConnectionManager } from "./lsp";
-import { ScenePreviewProvider } from "./scene_tools";
 import { GodotDebugger } from "./debugger";
 import { FormattingProvider } from "./formatter";
+import { ClientConnectionManager } from "./lsp";
 import {
-	get_configuration,
+	GDCompletionItemProvider,
+	GDDefinitionProvider,
+	GDDocumentDropEditProvider,
+	GDDocumentLinkProvider,
+	GDDocumentationProvider,
+	GDHoverProvider,
+	GDInlayHintsProvider,
+	GDProjectPicker,
+	GDSemanticTokensProvider,
+	GDTaskProvider,
+} from "./providers";
+import { ScenePreviewProvider } from "./scene_tools";
+import {
+	clean_godot_path,
+	convert_uri_to_resource_path,
 	find_file,
-	find_project_file,
-	register_command,
-	set_context,
+	get_configuration,
 	get_editor_data_dir,
+	get_extension_uri,
 	get_project_dir,
 	get_project_version,
+	is_debug_mode,
+	killSubProcesses,
+	prompt_for_godot_executable,
+	register_command,
+	set_context,
+	subProcess,
 	verify_godot_version,
-	convert_uri_to_resource_path,
 } from "./utils";
-import { prompt_for_godot_executable } from "./utils/prompts";
-import { killSubProcesses, subProcess } from "./utils/subspawn";
 
-interface Extension {
-	context?: vscode.ExtensionContext;
-	lsp?: ClientConnectionManager;
-	debug?: GodotDebugger;
-	scenePreviewProvider?: ScenePreviewProvider;
-	linkProvider?: GDDocumentLinkProvider;
-	dropsProvider?: GDDocumentDropEditProvider;
-	hoverProvider?: GDHoverProvider;
-	inlayProvider?: GDInlayHintsProvider;
-	formattingProvider?: FormattingProvider;
-	docsProvider?: GDDocumentationProvider;
-	definitionProvider?: GDDefinitionProvider;
-	semanticTokensProvider?: GDSemanticTokensProvider;
-	completionProvider?: GDCompletionItemProvider;
-	tasksProvider?: GDTaskProvider;
+function buildGlobals(context: vscode.ExtensionContext) {
+    const lsp = new ClientConnectionManager(context);
+
+	return {
+		context,
+		lsp,
+		debug: new GodotDebugger(context),
+		scenePreviewProvider: new ScenePreviewProvider(context),
+		linkProvider: new GDDocumentLinkProvider(context),
+		dropsProvider: new GDDocumentDropEditProvider(context),
+		hoverProvider: new GDHoverProvider(context),
+		inlayProvider: new GDInlayHintsProvider(lsp),
+		formattingProvider: new FormattingProvider(context),
+		docsProvider: new GDDocumentationProvider(context),
+		definitionProvider: new GDDefinitionProvider(context),
+		semanticTokensProvider: is_debug_mode() ? new GDSemanticTokensProvider(context) : undefined,
+		completionProvider: is_debug_mode() ? new GDCompletionItemProvider(context) : undefined,
+		tasksProvider: is_debug_mode() ? new GDTaskProvider(context) : undefined,
+		projectPicker: new GDProjectPicker(),
+	};
 }
 
-export const globals: Extension = {};
+export let ctx: vscode.ExtensionContext;
+export let globals: ReturnType<typeof buildGlobals>;
 
 export function activate(context: vscode.ExtensionContext) {
-	attemptSettingsUpdate(context);
+	ctx = context;
+	globals = buildGlobals(context);
 
-	globals.context = context;
-	globals.lsp = new ClientConnectionManager(context);
-	globals.debug = new GodotDebugger(context);
-	globals.scenePreviewProvider = new ScenePreviewProvider(context);
-	globals.linkProvider = new GDDocumentLinkProvider(context);
-	globals.dropsProvider = new GDDocumentDropEditProvider(context);
-	globals.hoverProvider = new GDHoverProvider(context);
-	globals.inlayProvider = new GDInlayHintsProvider(context);
-	globals.formattingProvider = new FormattingProvider(context);
-	globals.docsProvider = new GDDocumentationProvider(context);
-	globals.definitionProvider = new GDDefinitionProvider(context);
-	// globals.semanticTokensProvider = new GDSemanticTokensProvider(context);
-	// globals.completionProvider = new GDCompletionItemProvider(context);
-	// globals.tasksProvider = new GDTaskProvider(context);
+    // globals.inlayProvider.registerLsp();
 
 	context.subscriptions.push(
 		register_command("openEditor", open_workspace_with_editor),
