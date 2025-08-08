@@ -36,7 +36,7 @@ import {
 } from "./utils";
 
 function buildGlobals(context: vscode.ExtensionContext) {
-    const lsp = new ClientConnectionManager(context);
+	const lsp = new ClientConnectionManager(context);
 
 	return {
 		context,
@@ -60,11 +60,13 @@ function buildGlobals(context: vscode.ExtensionContext) {
 export let ctx: vscode.ExtensionContext;
 export let globals: ReturnType<typeof buildGlobals>;
 
+// export function getGlobals() {
+// 	return globals;
+// }
+
 export function activate(context: vscode.ExtensionContext) {
 	ctx = context;
 	globals = buildGlobals(context);
-
-    // globals.inlayProvider.registerLsp();
 
 	context.subscriptions.push(
 		register_command("openEditor", open_workspace_with_editor),
