@@ -270,9 +270,12 @@ expression {
 
 ## Progress Tracking
 
-- [ ] Setup Lezer dependencies and build script
-- [ ] Create minimal GDScript grammar
-- [ ] Parse sample GDScript files
+- [x] Setup Lezer dependencies and build script
+- [x] Create minimal GDScript grammar
+- [ ] Fix grammar to properly parse real-world code
+  - Current state: Grammar generates but has shift/reduce conflicts
+  - Error: Keywords like `func`, `var`, `class_name` not being recognized
+  - Tested against 584 real files (73,202 lines) - all have parse errors
 - [ ] Implement tree walker
 - [ ] Implement indentation rule
 - [ ] Port spacing rules
@@ -281,6 +284,18 @@ expression {
 - [ ] Integration tests
 - [ ] Remove old TextMate formatter
 - [ ] Update documentation
+
+## Current Status (Session 2026-04-12)
+
+**Grammar Issue:** The generated grammar has significant shift/reduce conflicts that cause keywords to not be recognized properly. Testing against real-world projects (Isotope: 489 files, SkyknightsOnline: 95 files) shows 0% pass rate.
+
+**Root Cause:** Lezer's handling of keywords vs identifiers needs proper configuration. The `@extend` directive for contextual keywords isn't working as expected.
+
+**Next Steps:**
+1. Study the Lezer JavaScript grammar more closely for how it handles keywords
+2. Consider using `@specialize` properly or declaring keywords as explicit tokens
+3. Fix the precedence conflicts in the grammar
+4. Re-test against real projects
 
 ## References
 
