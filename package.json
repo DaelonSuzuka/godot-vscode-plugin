@@ -41,6 +41,7 @@
 		"esbuild": "npm run esbuild-base -- --sourcemap",
 		"esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
 		"generate-icons": "ts-node tools/generate_icons.ts",
+		"generate-grammar": "lezer-generator src/formatter/grammar/gdscript.grammar -o src/formatter/grammar/generated/gdscript.js",
 		"test": "vscode-test"
 	},
 	"contributes": {
@@ -922,6 +923,9 @@
 		"typescript": "^5.9.3"
 	},
 	"dependencies": {
+		"@lezer/common": "^1.5.2",
+		"@lezer/generator": "^1.8.0",
+		"@lezer/lr": "^1.4.8",
 		"@vscode/debugadapter": "^1.68.0",
 		"@vscode/debugprotocol": "^1.68.0",
 		"await-notify": "^1.0.1",

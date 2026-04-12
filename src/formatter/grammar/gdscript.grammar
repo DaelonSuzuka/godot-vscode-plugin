@@ -1,0 +1,65 @@
+// GDScript grammar for Lezer parser - Minimal Working Version
+// This grammar focuses on basic structure detection for formatting
+
+@top Script { statement* }
+
+@skip { space | Comment }
+
+// Use simple terminals for keywords
+statement {
+  varStatement
+  constStatement
+  funcStatement
+  classStatement
+  ifStatement
+  forStatement
+  whileStatement
+  returnStatement
+  passStatement
+  expression
+}
+
+// Use unique names to avoid keyword conflicts
+varStatement { "var" identifier optionalType optionalInit }
+constStatement { "const" identifier optionalInit }
+funcStatement { "func" identifier optionalParams optionalReturn }
+classStatement { "class_name" identifier }
+ifStatement { "if" expression }
+forStatement { "for" identifier "in" expression }
+whileStatement { "while" expression }
+returnStatement { "return" optionalExpression }
+passStatement { "pass" }
+
+optionalType { (":" identifier)? }
+optionalInit { ("=" expression)? }
+optionalParams { ("(" paramList? ")")? }
+optionalReturn { ("->" identifier)? }
+optionalExpression { expression? }
+paramList { param ("," param)* }
+param { identifier optionalType optionalInit }
+
+// Simple expression - just handle basic cases
+expression {
+  Number
+  String
+  identifier
+  callExpr
+  binaryExpr
+  parenExpr
+}
+
+callExpr { identifier "(" argList? ")" }
+argList { expression ("," expression)* }
+binaryExpr { expression binaryOp expression }
+binaryOp { "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" }
+parenExpr { "(" expression ")" }
+
+// Terminals
+@tokens {
+  space { $[ \t\n\r]+ }
+  Comment { "#" ![\n]* }
+  
+  identifier { $[a-zA-Z_] $[a-zA-Z_0-9]* }
+  Number { $[0-9]+ ("." $[0-9]+)? }
+  String { '"' ![\\"\n]* '"' | "'" !['\\\n]* "'" }
+}
