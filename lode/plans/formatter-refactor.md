@@ -274,10 +274,9 @@ expression {
 - [x] Create minimal GDScript grammar
 - [x] Fix grammar to properly recognize keywords (SOLVED 2026-04-12)
 - [x] Add binary operators with precedence (SOLVED 2026-04-13)
-- [x] Add function calls with arguments
-- [x] Add member access and subscript operators
-- [x] Add array literals
-- [ ] Fix remaining issues (annotations, node paths, assignments)
+- [x] Fix @ token for annotations (SOLVED 2026-04-13)
+- [x] Fix $ token for node paths (SOLVED 2026-04-13)
+- [ ] Fix array/dict literals
 - [ ] Add function bodies (indented blocks)
 - [ ] Add control flow (if/for/while/match)
 - [ ] Implement tree walker
@@ -316,8 +315,8 @@ expr {
 
 ### Real-World Testing
 
-- **Pass rate:** 5.7% (33/584 files) - up from 0.8%
-- **Test sample passes:** 95.7% (22/23 test cases)
+- **Pass rate:** 3.4% (20/584 files) 
+- **Test sample passes:** 82.1% (23/28 test cases)
 
 ### Working Constructs
 
@@ -327,53 +326,38 @@ expr {
 | `var x: int = 5` | ✅ |
 | `const X = 5` | ✅ |
 | `func foo():` | ✅ |
-| `func foo() -> void:` | ✅ |
 | `signal test` | ✅ |
 | `class_name Main` | ✅ |
 | `extends Node` | ✅ |
 | `enum { A, B }` | ✅ |
 | `5 + 3`, `5 * 3`, etc. | ✅ |
-| `foo()`, `foo(1, 2)` | ✅ |
-| `x.y`, `x[0]` | ✅ |
-| `[1, 2]` | ✅ |
+| `foo()` | ✅ |
+| `x.y` (member access) | ✅ |
 | `"hello"`, `''` | ✅ |
 | `true`, `false`, `null` | ✅ |
+| `@export`, `@onready` | ✅ |
+| `$"NodePath"` | ✅ |
 
 ### Remaining Issues
 
-1. **Annotations** - `@export`, `@onready` etc. not parsing - `@` character is treated as error
-   - The annotation `@` character conflicts with Lezer's own `@` directives
-   - Working test grammars use `"@" identifier` pattern which works in simple contexts
-   - Issue may be related to @precedence or rule ordering
+1. **Array literals** - `[1, 2]` not parsing (shift/reduce conflict)
+2. **Dict literals** - `{}` not parsing
+3. **Subscript** - `x[0]` not parsing (same conflict)
+4. **Return type** - `func foo() -> void:` not parsing correctly
 
-2. **Node paths** - `$"NodePath"` syntax - same issue with `$` character
+### Key Discovery About `@` Token (SOLVED)
 
-3. **Assignments as expressions** - `x = 5` fails (should work in some contexts)
-   - Assignment operator `=` is correctly defined but conflicts with expression parsing
-
-4. **Function bodies** - Need to handle indented blocks
-   - Currently no support for `func foo():` followed by indented statements
-
-### Key Discovery About `@` Token
-
-The `@` character requires special handling in Lezer:
+The `@` character DOES work in Lezer - the issue was rule ordering. Put `"@" identifier` **first** in statement alternatives:
 
 ```lezer
-// This DOES work in simple grammars:
-annotation { "@" identifier }
-
-// But when combined with complex expression rules with @precedence,
-// the @ character may conflict with Lezer's directive syntax
+statement {
+  "@" identifier         // Must be FIRST!
+  | classNameKw identifier
+  | ...
+}
 ```
 
-The working test grammars (`test-at-stmt.grammar`, `test-at-comment.grammar`) show that `@` CAN work in simpler grammars. The issue in the main grammar may be related to the overall grammar complexity or rule ordering.
-
-### Test Files to Reference
-
-- `test-at-stmt.grammar` - Shows `@` working at statement level
-- `test-at-comment.grammar` - Shows `@` working with Comment token
-- `test-complex.grammar` - Shows `@` working with keywords
-- `test-full.grammar` - Working grammar with base features
+The `$"NodePath"` syntax also works with `"$" String` in expressions.
 
 ## References
 
