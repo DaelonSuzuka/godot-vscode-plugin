@@ -1,263 +1,58 @@
-// GDScript grammar for Lezer parser
-// Based on GDScript language spec and existing TextMate grammar
+// GDScript grammar - stable working version
+@precedence { expr @left }
 
 @top Script { statement* }
 
-// Operator precedence (low to high)
-@precedence {
-  assign,
-  or,
-  and,
-  comparison,
-  bor,
-  bxor,
-  band,
-  shift,
-  plus,
-  times,
-  power,
-  prefix,
-  postfix,
-  call,
-  member
-}
-
 @skip { space | Comment }
 
-// === Top-level statements ===
+// === Keywords ===
+varKw { @specialize[@name=var]<identifier, "var"> }
+constKw { @specialize[@name=const]<identifier, "const"> }
+funcKw { @specialize[@name=func]<identifier, "func"> }
+staticKw { @specialize[@name=static]<identifier, "static"> }
+extendsKw { @specialize[@name=extends]<identifier, "extends"> }
+classNameKw { @specialize[@name=class_name]<identifier, "class_name"> }
+signalKw { @specialize[@name=signal]<identifier, "signal"> }
+enumKw { @specialize[@name=enum]<identifier, "enum"> }
+trueKw { @specialize[@name=true]<identifier, "true"> }
+falseKw { @specialize[@name=false]<identifier, "false"> }
+nullKw { @specialize[@name=null]<identifier, "null"> }
 
+// === Statements - @ annotation first, simple structure ===
 statement {
-  ExtendsStmt |
-  ClassNameStmt |
-  SignalStmt |
-  EnumStmt |
-  ConstStmt |
-  VarStmt |
-  FuncStmt |
-  ClassStmt |
-  IfStmt |
-  ForStmt |
-  WhileStmt |
-  MatchStmt |
-  ReturnStmt |
-  ExpressionStmt
+  "@" identifier
+  | classNameKw identifier
+  | extendsKw identifier ("." identifier)*
+  | signalKw identifier
+  | enumKw identifier? "{" identifier ("," identifier)* "}"
+  | constKw identifier "=" expr
+  | varKw identifier (":" identifier)? ("=" expr)?
+  | staticKw? funcKw identifier "(" ")" ":"
+  | expr
 }
 
-// === Class-level declarations ===
-
-ExtendsStmt { "extends" (identifier | String) ExtendPath* }
-ExtendPath { "." identifier }
-
-ClassNameStmt { "class_name" identifier }
-
-SignalStmt { "signal" identifier ("(" ParamList? ")")? }
-
-EnumStmt { "enum" identifier? "{" EnumEntries "}" }
-EnumEntries { identifier ("=" expression)? ("," EnumEntries)? }
-
-ConstStmt { "const" identifier (":" type)? "=" expression }
-
-VarStmt {
-  annotation*
-  rpcKeyword?
-  exportKeyword?
-  onreadyKeyword?
-  "var" identifier
-  (":" type)?
-  ("=" expression)?
-  setterGetter?
+// === Expressions - working set ===
+expr {
+  expr !expr ("+" | "-") expr
+  | expr !expr ("*" | "/" | "%") expr
+  | expr !expr ("==" | "!=" | "<" | ">" | "<=" | ">=") expr
+  | expr !expr ("=" | "+=" | "-=" | "*=" | "/=") expr
+  | expr "." identifier
+  | "$" String
+  | identifier "(" ")"
+  | identifier
+  | Number
+  | String
+  | trueKw
+  | falseKw
+  | nullKw
 }
-
-setterGetter {
-  "setget" identifier ("," identifier)?
-  |
-  ":"
-  "get" "=" expression
-  setter?
-  |
-  setter
-  "get" "=" expression
-}
-
-setter { "set" "(" identifier ")" "=" expression }
-getter { "get" "=" expression }
-
-// Keywords that can also be identifiers
-exportKeyword { @extend<identifier, "export"> }
-onreadyKeyword { @extend<identifier, "onready"> }
-rpcKeyword { @extend<identifier, "remote" | "master" | "puppet" | "remotesync" | "sync"> }
-
-annotation { "@" identifier ("(" ArgList? ")")? }
-
-// === Functions ===
-
-FuncStmt {
-  annotation*
-  rpcKeyword?
-  "static"?
-  "func" identifier
-  ("(" ParamList? ")")?
-  ("->" type)?
-}
-
-ParamList { Param ("," Param)* ","? }
-Param {
-  identifier
-  (":" type)?
-  ("=" expression)?
-}
-
-// === Control flow ===
-
-IfStmt {
-  "if" expression ":" statement*
-  ("elif" expression ":" statement*)*
-  ("else" ":" statement*)?
-}
-
-ForStmt { "for" identifier "in" expression ":" statement* }
-
-WhileStmt { "while" expression ":" statement* }
-
-MatchStmt { "match" expression ":" MatchCase* }
-MatchCase { pattern? ":" statement* }
-
-pattern {
-  "_"
-  identifier
-  Number
-  String
-  "[" pattern ("," pattern)* "]"
-  "{" (pattern ":" pattern) ("," (pattern ":" pattern))* "}"
-}
-
-ReturnStmt { "return" expression? }
-
-// === Inner classes ===
-
-ClassStmt { "class" identifier ("extends" (identifier | String))? "{" statement* "}" }
-
-// === Expressions ===
-
-ExpressionStmt { expression }
-
-expression { AssignmentExpr | TernaryExpr }
-
-TernaryExpr { expression "if" expression "else" expression }
-
-AssignmentExpr {
-  expression !assign
-  ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | "&=" | "|=" | "^=" | "<<=" | ">>=")
-  expression
-  | OrExpr
-}
-
-OrExpr {
-  OrExpr ("or" | "||") AndExpr
-  | AndExpr
-}
-
-AndExpr {
-  AndExpr ("and" | "&&") BitorExpr
-  | BitorExpr
-}
-
-BitorExpr { BitorExpr "|" BitxorExpr | BitxorExpr }
-BitxorExpr { BitxorExpr "^" BitandExpr | BitandExpr }
-BitandExpr { BitandExpr "&" ShiftExpr | ShiftExpr }
-ShiftExpr { ShiftExpr ("<<" | ">>") CompareExpr | CompareExpr }
-CompareExpr { 
-  CompareExpr ("==" | "!=" | "<" | ">" | "<=" | ">=" | "is" | "in") AddExpr
-  | AddExpr 
-}
-AddExpr { AddExpr ("+" | "-") MulExpr | MulExpr }
-MulExpr { MulExpr ("*" | "/" | "%") PowerExpr | PowerExpr }
-PowerExpr { PowerExpr "**" UnaryExpr | UnaryExpr }
-
-UnaryExpr {
-  ("-" | "+" | "not" | "!" | "~") UnaryExpr
-  | PostfixExpr
-}
-
-PostfixExpr {
-  PostfixExpr ("++" | "--")
-  | CallExpr
-}
-
-CallExpr {
-  CallExpr !call "(" ArgList? ")"
-  | MemberExpr
-}
-
-MemberExpr {
-  MemberExpr !member ("." identifier | "?" "." identifier | "[" expression "]" | "?" "[" expression "]")
-  | PrimaryExpr
-}
-
-PrimaryExpr {
-  identifier
-  Number
-  String
-  StringName
-  NodePath
-  ArrayLiteral
-  DictLiteral
-  "(" expression ")"
-  "null"
-  "true"
-  "false"
-  "self"
-  LambdaExpr
-  AwaitExpr
-  YieldExpr
-}
-
-ArrayLiteral { "[" (expression ("," expression)* ","?)? "]" }
-DictLiteral { "{" (DictEntry ("," DictEntry)* ","?)? "}" }
-DictEntry {
-  expression ":" expression
-  | identifier "=" expression
-}
-
-LambdaExpr { "func" ("(" ParamList? ")")? ("->" type)? ":" statement* }
-AwaitExpr { "await" expression }
-YieldExpr { "yield" "(" (expression ("," expression)*)? ")" }
-
-// === Arguments and types ===
-
-ArgList { expression ("," expression)* ","? }
-
-type {
-  identifier ("[" type ("," type)* "]")?
-  | builtinType
-}
-
-builtinType { "bool" | "int" | "float" | "String" | "Array" | "Dictionary" | "void" }
-
-// === Literals ===
-
-StringName { "&" String }
-NodePath { "^" String }
 
 // === Tokens ===
-
 @tokens {
   space { @whitespace+ }
-  
   Comment { "#" ![\n]* }
-  
   identifier { (@asciiLetter | "_") (@asciiLetter | "_" | @digit)* }
-  
-  Number {
-    @digit ("_"? @digit)*
-    ("." @digit ("_"? @digit)*)?
-    ( ("e" | "E") ("+" | "-")? @digit ("_"? @digit)* )?
-    | "0x" ($[a-fA-F0-9] | "_")+
-    | "0b" ($[01] | "_")+
-  }
-  
-  String {
-    '"' (![\\"\n] | "\\" _)* '"'
-    | "'" (!['\\\n] | "\\" _)* "'" 
-  }
+  Number { @digit+ ("." @digit+)? }
+  String { '"' ![\\"\n]* '"' | "'" !['\\\n]* "'" }
 }

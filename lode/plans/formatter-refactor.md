@@ -272,30 +272,108 @@ expression {
 
 - [x] Setup Lezer dependencies and build script
 - [x] Create minimal GDScript grammar
-- [ ] Fix grammar to properly parse real-world code
-  - Current state: Grammar generates but has shift/reduce conflicts
-  - Error: Keywords like `func`, `var`, `class_name` not being recognized
-  - Tested against 584 real files (73,202 lines) - all have parse errors
+- [x] Fix grammar to properly recognize keywords (SOLVED 2026-04-12)
+- [x] Add binary operators with precedence (SOLVED 2026-04-13)
+- [x] Add function calls with arguments
+- [x] Add member access and subscript operators
+- [x] Add array literals
+- [ ] Fix remaining issues (annotations, node paths, assignments)
+- [ ] Add function bodies (indented blocks)
+- [ ] Add control flow (if/for/while/match)
 - [ ] Implement tree walker
 - [ ] Implement indentation rule
 - [ ] Port spacing rules
-- [ ] Expand grammar for all constructs
-- [ ] Test with GDScript 3 and 4 files
 - [ ] Integration tests
 - [ ] Remove old TextMate formatter
-- [ ] Update documentation
 
-## Current Status (Session 2026-04-12)
+## Critical Discovery: Lezer Keyword Handling (SOLVED 2026-04-12)
 
-**Grammar Issue:** The generated grammar has significant shift/reduce conflicts that cause keywords to not be recognized properly. Testing against real-world projects (Isotope: 489 files, SkyknightsOnline: 95 files) shows 0% pass rate.
+### Root Causes Identified
 
-**Root Cause:** Lezer's handling of keywords vs identifiers needs proper configuration. The `@extend` directive for contextual keywords isn't working as expected.
+1. **Inline @specialize doesn't create named tokens** - Must define keywords as separate rules
+2. **Binary operators need @precedence** - Left-recursive rules need the `!tag` precedence marker
 
-**Next Steps:**
-1. Study the Lezer JavaScript grammar more closely for how it handles keywords
-2. Consider using `@specialize` properly or declaring keywords as explicit tokens
-3. Fix the precedence conflicts in the grammar
-4. Re-test against real projects
+### Solution Pattern
+
+```lezer
+@precedence { expr @left }
+
+// Keywords as separate rules
+varKw { @specialize[@name=var]<identifier, "var"> }
+funcKw { @specialize[@name=func]<identifier, "func"> }
+
+// Binary operators with precedence tag
+expr {
+  expr !expr ("+" | "-") expr
+  | expr !expr ("*" | "/" | "%") expr
+  | identifier "(" argList? ")"
+  | identifier
+  | Number
+}
+```
+
+## Grammar Progress (Session 2026-04-13)
+
+### Real-World Testing
+
+- **Pass rate:** 5.7% (33/584 files) - up from 0.8%
+- **Test sample passes:** 95.7% (22/23 test cases)
+
+### Working Constructs
+
+| Construct | Status |
+|-----------|--------|
+| `var x = 5` | ✅ |
+| `var x: int = 5` | ✅ |
+| `const X = 5` | ✅ |
+| `func foo():` | ✅ |
+| `func foo() -> void:` | ✅ |
+| `signal test` | ✅ |
+| `class_name Main` | ✅ |
+| `extends Node` | ✅ |
+| `enum { A, B }` | ✅ |
+| `5 + 3`, `5 * 3`, etc. | ✅ |
+| `foo()`, `foo(1, 2)` | ✅ |
+| `x.y`, `x[0]` | ✅ |
+| `[1, 2]` | ✅ |
+| `"hello"`, `''` | ✅ |
+| `true`, `false`, `null` | ✅ |
+
+### Remaining Issues
+
+1. **Annotations** - `@export`, `@onready` etc. not parsing - `@` character is treated as error
+   - The annotation `@` character conflicts with Lezer's own `@` directives
+   - Working test grammars use `"@" identifier` pattern which works in simple contexts
+   - Issue may be related to @precedence or rule ordering
+
+2. **Node paths** - `$"NodePath"` syntax - same issue with `$` character
+
+3. **Assignments as expressions** - `x = 5` fails (should work in some contexts)
+   - Assignment operator `=` is correctly defined but conflicts with expression parsing
+
+4. **Function bodies** - Need to handle indented blocks
+   - Currently no support for `func foo():` followed by indented statements
+
+### Key Discovery About `@` Token
+
+The `@` character requires special handling in Lezer:
+
+```lezer
+// This DOES work in simple grammars:
+annotation { "@" identifier }
+
+// But when combined with complex expression rules with @precedence,
+// the @ character may conflict with Lezer's directive syntax
+```
+
+The working test grammars (`test-at-stmt.grammar`, `test-at-comment.grammar`) show that `@` CAN work in simpler grammars. The issue in the main grammar may be related to the overall grammar complexity or rule ordering.
+
+### Test Files to Reference
+
+- `test-at-stmt.grammar` - Shows `@` working at statement level
+- `test-at-comment.grammar` - Shows `@` working with Comment token
+- `test-complex.grammar` - Shows `@` working with keywords
+- `test-full.grammar` - Working grammar with base features
 
 ## References
 

@@ -2,5 +2,16 @@
 export const
   Comment = 1,
   Script = 2,
-  Number = 3,
-  String = 4
+  class_name = 3,
+  _extends = 4,
+  signal = 5,
+  _enum = 6,
+  _const = 7,
+  String = 8,
+  Number = 9,
+  _true = 10,
+  _false = 11,
+  _null = 12,
+  _var = 13,
+  _static = 14,
+  func = 15
