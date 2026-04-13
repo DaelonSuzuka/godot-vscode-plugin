@@ -1,4 +1,4 @@
-// GDScript grammar - stable working version
+// GDScript grammar
 @precedence { expr @left }
 
 @top Script { statement* }
@@ -18,20 +18,23 @@ trueKw { @specialize[@name=true]<identifier, "true"> }
 falseKw { @specialize[@name=false]<identifier, "false"> }
 nullKw { @specialize[@name=null]<identifier, "null"> }
 
-// === Statements - @ annotation first, simple structure ===
+// === Statements ===
 statement {
   "@" identifier
   | classNameKw identifier
   | extendsKw identifier ("." identifier)*
-  | signalKw identifier
+  | signalKw identifier ("(" paramList? ")")?
   | enumKw identifier? "{" identifier ("," identifier)* "}"
-  | constKw identifier "=" expr
+  | constKw identifier ("=" expr)?
   | varKw identifier (":" identifier)? ("=" expr)?
-  | staticKw? funcKw identifier "(" ")" ":"
+  | staticKw? funcKw identifier "(" paramList? ")" ("->" identifier)? ":"
   | expr
 }
 
-// === Expressions - working set ===
+paramList { param ("," param)* }
+param { identifier (":" identifier)? ("=" expr)? }
+
+// === Expressions ===
 expr {
   expr !expr ("+" | "-") expr
   | expr !expr ("*" | "/" | "%") expr
@@ -39,7 +42,9 @@ expr {
   | expr !expr ("=" | "+=" | "-=" | "*=" | "/=") expr
   | expr "." identifier
   | "$" String
-  | identifier "(" ")"
+  | identifier "(" argList? ")"
+  | "[" (expr ("," expr)*)? "]"
+  | "{" "}"
   | identifier
   | Number
   | String
@@ -48,11 +53,14 @@ expr {
   | nullKw
 }
 
+argList { expr ("," expr)* }
+
 // === Tokens ===
 @tokens {
   space { @whitespace+ }
   Comment { "#" ![\n]* }
   identifier { (@asciiLetter | "_") (@asciiLetter | "_" | @digit)* }
   Number { @digit+ ("." @digit+)? }
-  String { '"' ![\\"\n]* '"' | "'" !['\\\n]* "'" }
+  // String matches empty strings too
+  String { '"' '"' | '"' ![\\"\n]+ '"' | "'" "'" | "'" !['\\\n]+ "'" }
 }
