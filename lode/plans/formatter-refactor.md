@@ -276,8 +276,9 @@ expression {
 - [x] Add binary operators with precedence (SOLVED 2026-04-13)
 - [x] Fix @ token for annotations (SOLVED 2026-04-13)
 - [x] Fix $ token for node paths (SOLVED 2026-04-13)
-- [ ] Fix array/dict literals
-- [ ] Add function bodies (indented blocks)
+- [x] Add function parameters and call arguments (SOLVED 2026-04-13)
+- [x] Add array/dict literals and subscript (SOLVED 2026-04-13)
+- [ ] Add function bodies (indented blocks) - MAIN BLOCKER
 - [ ] Add control flow (if/for/while/match)
 - [ ] Implement tree walker
 - [ ] Implement indentation rule
