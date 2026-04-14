@@ -1,0 +1,22 @@
+// Test indentation tracking
+@top Script { statement* }
+
+@skip { space | Comment }
+
+// External tokens
+@external tokens indentation from "./tokens" { indent, dedent }
+@external tokens newlines from "./tokens" { newline }
+
+statement {
+  funcStmt
+  | simpleStmt
+}
+
+funcStmt { "func" identifier ":" newline indent statement+ dedent }
+simpleStmt { "pass" | identifier }
+
+@tokens {
+  space { @whitespace+ }
+  Comment { "#" ![\n]* }
+  identifier { (@asciiLetter | "_") (@asciiLetter | "_" | @digit)* }
+}

@@ -1,4 +1,4 @@
-// GDScript grammar
+// GDScript grammar with indentation support
 @precedence { expr @left }
 
 @top Script { statement* }
@@ -61,6 +61,5 @@ argList { expr ("," expr)* }
   Comment { "#" ![\n]* }
   identifier { (@asciiLetter | "_") (@asciiLetter | "_" | @digit)* }
   Number { @digit+ ("." @digit+)? }
-  // String matches empty strings too
   String { '"' '"' | '"' ![\\"\n]+ '"' | "'" "'" | "'" !['\\\n]+ "'" }
 }
