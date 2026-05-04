@@ -278,13 +278,113 @@ expression {
 - [x] Fix $ token for node paths (SOLVED 2026-04-13)
 - [x] Add function parameters and call arguments (SOLVED 2026-04-13)
 - [x] Add array/dict literals and subscript (SOLVED 2026-04-13)
-- [ ] Add function bodies (indented blocks) - MAIN BLOCKER
-- [ ] Add control flow (if/for/while/match)
+- [x] Add control flow keywords (if/elif/else, for, while, match, break, continue) (SOLVED 2026-04-14)
+- [x] Add multi-line support (newlines as whitespace) (SOLVED 2026-04-14)
+- [x] Parse all top-level constructs (class_name, extends, signals, vars, funcs, enums) (SOLVED 2026-04-14)
+- [x] Implement indent/dedent external tokenizers (Python grammar pattern) - PROVEN in test-indent.grammar
+- [ ] Add function bodies (indented blocks) - rebuild gdscript.grammar from test-indent base
+- [ ] Wire up full build pipeline (lezer-generator + rollup + ESM/CJS output)
 - [ ] Implement tree walker
 - [ ] Implement indentation rule
 - [ ] Port spacing rules
 - [ ] Integration tests
 - [ ] Remove old TextMate formatter
+
+## Current Status (2026-05-03)
+
+### Top-level grammar: 30/30 unit tests passing
+
+Parses correctly without indentation:
+- Variables, constants, function signatures, annotations, signals, enums, class headers
+- All expression types (binary ops, calls, member access, arrays, dicts, subscripts)
+- Multi-line code with newlines as whitespace
+
+Real-world: ~6.7% (39/585 files) — limited by lack of indentation tracking.
+
+### BREAKTHROUGH: Indentation Tracking Works
+
+A minimal grammar (`test-indent.grammar`) **successfully generates** with external token IDs. The bundled parser (via Rollup) produces correct output. This proves the Python Lezer pattern works for GDScript.
+
+**What was wrong before:** The previous `gdscript.grammar` had `@external tokens` and `@context` declarations, but the grammar structure didn't produce the external token IDs in the generated `.terms.js`. The root cause was likely a combination of: missing `@skip {}` block for `blankLine` rule, incorrect rule structure, or shift/reduce conflicts interfering with generation.
+
+**The working pattern (from test-indent.grammar):**
+
+```lezer
+@skip { space | Comment | newlineBracketed | blankLine }
+
+// ... grammar rules ...
+
+Body { ":" (simpleStatement | newline indent statement+ (dedent | eof)) }
+
+@context trackIndent from "./tokens.js"
+@external tokens indentation from "./tokens" { indent, dedent }
+@external tokens newlines from "./tokens" { newline, blankLineStart, newlineBracketed, eof }
+
+// blankLine is a RULE using external tokens, not an external token itself
+@skip {} {
+  blankLine { blankLineStart space? Comment? (newline | eof) }
+}
+
+@tokens {
+  space { $[ \t\f]+ }
+  Comment { "#" ![\n\r]* }
+  // ...
+  "("[@export=ParenL] ")" "["[@export=BracketL] "]" "{"[@export=BraceL] "}"
+}
+
+@detectDelim
+```
+
+**Key rules:**
+1. `@context trackIndent from "./tokens.js"` must be present
+2. `blankLine` is a **rule** in a `@skip {}` block, composed of external tokens
+3. Keywords must use `kw<term> { @specialize[@name={term}]<VariableName, term> }` — not bare strings that overlap with identifiers
+4. `@detectDelim` at the end
+5. `ParenL`, `BracketL`, `BraceL` exports needed so `tokens.js` can track bracketed contexts
+6. `tokens.js` imports term IDs from the **generated** `.terms.js` file
+7. Rollup bundles `parser.js` + `tokens.js` into a single distributable
+
+### Build Pipeline (Proven Working)
+
+```bash
+# 1. Generate parser from grammar
+npx lezer-generator src/formatter/grammar/test-indent.grammar -o src/formatter/grammar/generated/test-indent
+
+# 2. Copy tokens.js next to generated parser (imports from ./test-indent.terms.js)
+#    tokens.js must be in the same directory as the generated parser
+
+# 3. Bundle with Rollup
+npx rollup -c rollup.config.mjs
+#    → dist/test-index.js (ESM)
+#    → dist/test-index.cjs (CJS)
+```
+
+### Remaining Issue: ESM/CJS Import
+
+The bundled CJS module doesn't expose `parser` as a named export for ESM imports. Need to either:
+- Use `import pkg from './dist/test-index.js'; const { parser } = pkg;`
+- Or configure Rollup to produce proper named exports
+
+### Files in Working State
+
+| File | Status |
+|------|--------|
+| `test-indent.grammar` | ✅ Generates correctly, has all external tokens |
+| `generated/test-indent.js` | ✅ Generated parser with external token refs |
+| `generated/test-indent.terms.js` | ✅ Has indent, dedent, newline, blankLineStart, etc. |
+| `generated/tokens.js` | ✅ External tokenizers matching test-indent grammar |
+| `dist/test-index.js` / `.cjs` | ✅ Rollup bundle |
+| `gdscript.grammar` | ❌ Stale — needs rebuild from test-indent base |
+| `tokens.ts` / `tokens.js` | ❌ Stale — inconsistent state from previous session |
+
+### Next Steps
+
+1. **Rebuild `gdscript.grammar`** — Start from `test-indent.grammar` structure and add GDScript-specific constructs (annotations, var decls, match, class, etc.) incrementally, running `lezer-generator` at each step
+2. **Create proper `tokens.js`** — Match `tokens.ts`/`tokens.js` to the final grammar's term exports, add bracket tracking for `()`, `[]`, `{}` in GDScript-specific constructs
+3. **Resolve ESM/CJS import** — Ensure the bundled parser can be imported from the extension's TypeScript code
+4. **Test against real GDScript files** — Run the parser with indentation against the 585-file test corpus
+5. **Implement tree walker** — Traverse AST for formatting
+6. **Implement indentation rule** — Apply correct indentation based on AST structure
 
 ## Critical Discovery: Lezer Keyword Handling (SOLVED 2026-04-12)
 

@@ -32,7 +32,7 @@ Index of all lode documentation files.
 
 ## Plans
 
-- [plans/formatter-refactor.md](plans/formatter-refactor.md) - Rewrite formatter using Tree-sitter
+- [plans/formatter-refactor.md](plans/formatter-refactor.md) - Rewrite formatter using Lezer
 
 ## Temporary
 

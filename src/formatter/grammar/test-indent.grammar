@@ -1,22 +1,81 @@
-// Test indentation tracking
+// Minimal GDScript grammar with indentation tracking
 @top Script { statement* }
 
-@skip { space | Comment }
+@skip { space | Comment | newlineBracketed | blankLine }
 
-// External tokens
-@external tokens indentation from "./tokens" { indent, dedent }
-@external tokens newlines from "./tokens" { newline }
+statement { simpleStatement | compoundStatement }
 
-statement {
-  funcStmt
-  | simpleStmt
+simpleStatement {
+  smallStatement (newline | eof)
 }
 
-funcStmt { "func" identifier ":" newline indent statement+ dedent }
-simpleStmt { "pass" | identifier }
+smallStatement {
+  kw<"pass">
+  | kw<"return"> expr?
+  | kw<"break">
+  | kw<"continue">
+  | expr
+}
+
+compoundStatement {
+  FuncDef { kw<"func"> VariableName ParamList Body }
+  | VarStatement { kw<"var"> VariableName (":" typeRef)? ("=" expr)? }
+  | IfStatement { kw<"if"> expr Body (kw<"elif"> expr Body)* elseClause? }
+  | ForStatement { kw<"for"> VariableName kw<"in"> expr Body }
+  | WhileStatement { kw<"while"> expr Body }
+}
+
+elseClause { kw<"else"> Body }
+
+Body { ":" (simpleStatement | newline indent statement+ (dedent | eof)) }
+
+ParamList { "(" (param ("," param)*)? ")" }
+param { VariableName (":" typeRef)? ("=" expr)? }
+typeRef { VariableName ("." VariableName)* }
+
+expr {
+  expr !assign ("=" | "+=" | "-=" | "*=" | "/=") expr
+  | expr !compare ("==" | "!=" | "<" | ">" | "<=" | ">=") expr
+  | expr !plus ("+" | "-") expr
+  | expr !times ("*" | "/" | "%") expr
+  | expr !trail "." VariableName
+  | expr !trail "(" (expr ("," expr)*)? ")"
+  | expr !trail "[" expr "]"
+  | kw<"not"> expr
+  | "-" primary
+  | kw<"await"> expr
+  | primary
+}
+
+primary {
+  VariableName
+  | Number
+  | String
+  | kw<"true"> | kw<"false"> | kw<"null">
+  | kw<"self"> | kw<"super">
+}
+
+@precedence { assign @right, compare @left, plus @left, times @left, trail @left }
+
+kw<term> { @specialize[@name={term}]<VariableName, term> }
+
+@context trackIndent from "./tokens.js"
+
+@external tokens indentation from "./tokens" { indent, dedent }
+@external tokens newlines from "./tokens" { newline, blankLineStart, newlineBracketed, eof }
+
+@skip {} {
+  blankLine { blankLineStart space? Comment? (newline | eof) }
+}
 
 @tokens {
-  space { @whitespace+ }
-  Comment { "#" ![\n]* }
-  identifier { (@asciiLetter | "_") (@asciiLetter | "_" | @digit)* }
+  space { $[ \t\f]+ }
+  Comment { "#" ![\n\r]* }
+  Number { @digit+ ("." @digit+)? }
+  String { '"' (![\\"\n] | "\\" _)* '"' | "'" (!['\\\n] | "\\" _)* "'" }
+  VariableName { (@asciiLetter | "_") (@asciiLetter | "_" | @digit)* }
+
+  "("[@export=ParenL] ")" "["[@export=BracketL] "]" "{"[@export=BraceL] "}"
 }
+
+@detectDelim

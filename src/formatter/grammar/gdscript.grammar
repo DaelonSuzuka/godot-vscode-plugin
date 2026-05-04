@@ -1,11 +1,18 @@
-// GDScript grammar with indentation support
-@precedence { expr @left }
+// GDScript grammar for Lezer parser
+// Permissive: accepts both GDScript 3 and 4 syntax
+@precedence { expr @left, assign @right }
 
 @top Script { statement* }
 
 @skip { space | Comment }
 
+// External tokens for indentation (Python Lezer pattern)
+@external tokens indentation from "./tokens.js" { indent, dedent }
+@external tokens newlines from "./tokens.js" { newline, blankLineStart, newlineBracketed, eof }
+@context trackIndent from "./tokens.js"
+
 // === Keywords ===
+caseKw { @specialize[@name=case]<identifier, "case"> }
 varKw { @specialize[@name=var]<identifier, "var"> }
 constKw { @specialize[@name=const]<identifier, "const"> }
 funcKw { @specialize[@name=func]<identifier, "func"> }
@@ -14,52 +21,147 @@ extendsKw { @specialize[@name=extends]<identifier, "extends"> }
 classNameKw { @specialize[@name=class_name]<identifier, "class_name"> }
 signalKw { @specialize[@name=signal]<identifier, "signal"> }
 enumKw { @specialize[@name=enum]<identifier, "enum"> }
+ifKw { @specialize[@name=if]<identifier, "if"> }
+elifKw { @specialize[@name=elif]<identifier, "elif"> }
+elseKw { @specialize[@name=else]<identifier, "else"> }
+forKw { @specialize[@name=for]<identifier, "for"> }
+whileKw { @specialize[@name=while]<identifier, "while"> }
+matchKw { @specialize[@name=match]<identifier, "match"> }
+breakKw { @specialize[@name=break]<identifier, "break"> }
+continueKw { @specialize[@name=continue]<identifier, "continue"> }
+passKw { @specialize[@name=pass]<identifier, "pass"> }
+returnKw { @specialize[@name=return]<identifier, "return"> }
+classKw { @specialize[@name=class]<identifier, "class"> }
+inKw { @specialize[@name=in]<identifier, "in"> }
+isKw { @specialize[@name=is]<identifier, "is"> }
+asKw { @specialize[@name=as]<identifier, "as"> }
+notKw { @specialize[@name=not]<identifier, "not"> }
+andKw { @specialize[@name=and]<identifier, "and"> }
+orKw { @specialize[@name=or]<identifier, "or"> }
 trueKw { @specialize[@name=true]<identifier, "true"> }
 falseKw { @specialize[@name=false]<identifier, "false"> }
 nullKw { @specialize[@name=null]<identifier, "null"> }
+selfKw { @specialize[@name=self]<identifier, "self"> }
+superKw { @specialize[@name=super]<identifier, "super"> }
+awaitKw { @specialize[@name=await]<identifier, "await"> }
+yieldKw { @specialize[@name=yield]<identifier, "yield"> }
+onreadyKw { @specialize[@name=onready]<identifier, "onready"> }
+exportKw { @specialize[@name=export]<identifier, "export"> }
+rpcKw { @extend<identifier, "remote" | "master" | "puppet" | "sync"> }
 
 // === Statements ===
 statement {
-  "@" identifier
-  | classNameKw identifier
-  | extendsKw identifier ("." identifier)*
+  "@" identifier ("(" argList? ")")?
+  | classNameKw identifier ("." identifier)*
+  | extendsKw typeRef
   | signalKw identifier ("(" paramList? ")")?
-  | enumKw identifier? "{" identifier ("," identifier)* "}"
-  | constKw identifier ("=" expr)?
-  | varKw identifier (":" identifier)? ("=" expr)?
-  | staticKw? funcKw identifier "(" paramList? ")" ("->" identifier)? ":"
+  | enumKw identifier? "{" identifier ("," identifier)* ","? "}"
+  | constKw identifier (":" typeRef)? "=" expr
+  | varDecl
+  | funcDecl
+  | classDecl
+  | ifStatement
+  | forStatement
+  | whileStatement
+  | matchStatement
+  | returnStatement
+  | breakKw
+  | continueKw
+  | passKw
+  | simpleStatement
+}
+
+// Body for indented blocks (Python pattern)
+Body { ":" (simpleStatement | newline indent statement+ (dedent | eof)) }
+
+simpleStatement {
+  returnKw expr?
+  | breakKw
+  | continueKw
+  | passKw
   | expr
 }
 
-paramList { param ("," param)* }
-param { identifier (":" identifier)? ("=" expr)? }
+// Control flow
+ifStatement { ifKw expr Body elifClause* elseClause? }
+elifClause { elifKw expr Body }
+elseClause { elseKw Body }
 
-// === Expressions ===
+forStatement { forKw identifier "in" expr Body }
+whileStatement { whileKw expr Body }
+matchStatement { matchKw expr ":" newline indent matchClause+ (dedent | eof) }
+matchClause { caseKw pattern Body }
+pattern { expr }
+
+returnStatement { returnKw expr? }
+
+// Declarations
+varDecl {
+  ("@" identifier ("(" argList? ")")?)*
+  exportKw?
+  onreadyKw?
+  varKw identifier
+  (":" typeRef)?
+  ("=" expr)?
+}
+
+funcDecl {
+  ("@" identifier ("(" argList? ")")?)*
+  rpcKw?
+  staticKw? funcKw identifier
+  "(" paramList? ")"
+  ("->" typeRef)?
+  Body
+}
+
+classDecl { classKw identifier ("extends" typeRef)? Body }
+
+// Types
+typeRef { identifier ("." identifier)* }
+
+// Parameters & Arguments
+paramList { param ("," param)* ","? }
+param { identifier (":" typeRef)? ("=" expr)? }
+argList { expr ("," expr)* ","? }
+
+// Expressions
 expr {
-  expr !expr ("+" | "-") expr
+  expr !assign ("=" | "+=" | "-=" | "*=" | "/=") expr
+  | expr !expr orKw expr
+  | expr !expr andKw expr
+  | expr !expr ("==" | "!=" | "<" | ">" | "<=" | ">=" | "in" | "is") expr
+  | expr !expr ("+" | "-") expr
   | expr !expr ("*" | "/" | "%") expr
-  | expr !expr ("==" | "!=" | "<" | ">" | "<=" | ">=") expr
-  | expr !expr ("=" | "+=" | "-=" | "*=" | "/=") expr
-  | expr "." identifier
+  | "not" expr
+  | "-" primary
+  | primary
+}
+
+primary {
+  primary "." identifier
+  | primary "(" argList? ")"
+  | primary "[" expr "]"
   | "$" String
-  | identifier "(" argList? ")"
-  | "[" (expr ("," expr)*)? "]"
-  | "{" "}"
   | identifier
   | Number
   | String
-  | trueKw
-  | falseKw
-  | nullKw
+  | trueKw | falseKw | nullKw | selfKw | superKw
+  | "[" "]"
+  | "[" expr ("," expr)* ","? "]"
+  | "{" "}"
+  | "{" dictEntry ("," dictEntry)* ","? "}"
+  | "(" expr ")"
+  | awaitKw expr
+  | yieldKw "(" argList? ")"
 }
 
-argList { expr ("," expr)* }
+dictEntry { expr ":" expr }
 
-// === Tokens ===
+// Tokens
 @tokens {
   space { @whitespace+ }
   Comment { "#" ![\n]* }
   identifier { (@asciiLetter | "_") (@asciiLetter | "_" | @digit)* }
   Number { @digit+ ("." @digit+)? }
-  String { '"' '"' | '"' ![\\"\n]+ '"' | "'" "'" | "'" !['\\\n]+ "'" }
+  String { '"' (![\\"\n] | "\\" _)* '"' | "'" (!['\\\n] | "\\" _)* "'" }
 }

@@ -39,6 +39,11 @@ const tests = [
   
   // Multi-line friendly
   'var x: int = 5',
+  
+  // Multi-line (testing newline handling)
+  'class_name Main\nextends Node',
+  'class_name Main\nextends Node\nvar x = 5',
+  'class_name Main\n\nextends Node',
 ];
 
 console.log('Grammar test:');
@@ -48,9 +53,9 @@ for (const t of tests) {
   const errors = (tree.toString().match(/⚠/g) || []).length;
   if (errors === 0) {
     passed++;
-    console.log(`  OK: ${t}`);
+    console.log(`  OK: ${t.replace(/\n/g, '\\n')}`);
   } else {
-    console.log(`  FAIL: ${t} -> ${tree.toString()}`);
+    console.log(`  FAIL: ${t.replace(/\n/g, '\\n')} -> ${tree.toString()}`);
   }
 }
 console.log(`\nPassed: ${passed}/${tests.length}`);

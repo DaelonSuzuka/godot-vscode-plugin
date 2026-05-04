@@ -1,0 +1,10 @@
+// Minimal test grammar
+@top Script { statement* }
+@skip { space }
+
+statement { "var" identifier }
+
+@tokens {
+  space { @whitespace+ }
+  identifier { @asciiLetter+ }
+}
