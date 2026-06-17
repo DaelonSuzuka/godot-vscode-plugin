@@ -1,5 +1,10 @@
 # Changelog
 
+### 2.7.1
+
+- No changes from 2.7.0.
+  - This is 2.7.0 repackaged, as the VSIX uploaded to Marketplace was based on old commits.
+
 ### 2.7.0
 
 - [**Debugger QOL improvements and small fixes**](https://github.com/godotengine/godot-vscode-plugin/pull/944)
