@@ -1,5 +1,29 @@
 # Changelog
 
+### 2.7.0
+
+- [**Debugger QOL improvements and small fixes**](https://github.com/godotengine/godot-vscode-plugin/pull/944)
+  - Property rename to match expected behavior:
+    - Members now do not have a prefix in object instances: `Member/Foo` -> `Foo`
+    - Inherited properties now do have a prefix: `Parent1/Foo`, `ParentOfParent1/Boo`
+    - Categories are properly treated and not displayed as property
+  - `__repr__` support
+    - If the class contains a `__repr__` member, value of it will be used as a display name for it's instances representations. That works for Dictionary keys too.
+  - Smaller changes and fixes:
+    - Use Arrays to display actual values for more complex types in preview (Vectors/Rects/etc)
+    - Strings are now 'quoted' (similar to other DAPs)
+    - Fix Rect2i being parsed as float instead of integer
+    - Improve StringName representation in values and dict keys: `&'StringName'`
+    - Improve tasks discoverabilty by adding tasks for test and package to `tasks.json`
+- [Statically type all function snippets](https://github.com/godotengine/godot-vscode-plugin/pull/958)
+- [Add abstract functions and `is not` to highlight grammar](https://github.com/godotengine/godot-vscode-plugin/pull/1000)
+- [Replace window reload with restart extension host](https://github.com/godotengine/godot-vscode-plugin/pull/955)
+- [Fix failing "Go to Definition" for some types](https://github.com/godotengine/godot-vscode-plugin/pull/994)
+- [Fix formatting for `super` and `self` keywords](https://github.com/godotengine/godot-vscode-plugin/pull/898)
+- [Fix wrong inlay hint positions in large documents](https://github.com/godotengine/godot-vscode-plugin/pull/993)
+- [Make sure last LSP client is disconnected before creating a new one](https://github.com/godotengine/godot-vscode-plugin/pull/912)
+- [Use strict null checks in extension code](https://github.com/godotengine/godot-vscode-plugin/pull/986)
+
 ### 2.6.1
 
 - [Fix broken LSP connection handshake, which resulted in VS Code constantly trying to reconnect](https://github.com/godotengine/godot-vscode-plugin/pull/968)
@@ -8,7 +32,7 @@
 
 - [**Add support for `uid://` references to hovers and document links**](https://github.com/godotengine/godot-vscode-plugin/pull/841)
 - [Add a formatter option to optionally add two spaces before end-of-line comments](https://github.com/godotengine/godot-vscode-plugin/pull/855)
-- [Add ability to specify `editorPath` using an environment variable (#807) (#856)](https://github.com/godotengine/godot-vscode-plugin/pull/856)
+- [Add ability to specify `editorPath` using an environment variable](https://github.com/godotengine/godot-vscode-plugin/pull/856)
 - [Improve "Debug Current File" action error message when scene and script name don't match](https://github.com/godotengine/godot-vscode-plugin/pull/836)
 - [Improve Debugger tool](https://github.com/godotengine/godot-vscode-plugin/pull/848)
 - [Update syntax highlighting](https://github.com/godotengine/godot-vscode-plugin/pull/877)
