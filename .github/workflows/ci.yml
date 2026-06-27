@@ -10,8 +10,6 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
         godot_version: ["4.7", "4.5.1"]
     runs-on: ${{ matrix.os }}
-    env:
-      FGVM_HOME: ${{ runner.temp }}/fgvm
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -58,6 +56,8 @@ jobs:
 
       - name: Install Godot ${{ matrix.godot_version }}
         run: fgvm install ${{ matrix.godot_version }}
+        env:
+          FGVM_HOME: ${{ runner.temp }}/fgvm
 
       - name: Install dependencies
         run: npm install
@@ -69,6 +69,7 @@ jobs:
             npm run test:engine -- ${{ matrix.godot_version }}
         env:
           GODOT_TOOLS_DEBUG: "false"
+          FGVM_HOME: ${{ runner.temp }}/fgvm
 
   build:
     runs-on: ubuntu-latest
