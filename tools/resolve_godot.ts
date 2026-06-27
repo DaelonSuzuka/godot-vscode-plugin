@@ -6,7 +6,10 @@ import * as os from "node:os";
  * Resolves the path to a fgvm-managed Godot executable for a given version.
  *
  * fgvm stores installations under:
- *   $FGVM_HOME/installations/<version-name>/<platform-dir>/<executable>
+ *   <fgvm-home>/installations/<version-name>/<platform-dir>/<executable>
+ *
+ * <fgvm-home> is $FGVM_HOME/fgvm if FGVM_HOME is set (fgvm creates a "fgvm"
+ * subdirectory inside the specified path), or ~/fgvm by default.
  *
  * Example on Windows:
  *   ~/fgvm/installations/4.7-stable-standard/win64.exe/Godot_v4.7-stable_win64.exe
@@ -17,8 +20,9 @@ import * as os from "node:os";
 
 function get_fgvm_home(): string {
 	const env = process.env.FGVM_HOME;
-	if (env && fs.existsSync(env)) {
-		return env;
+	if (env) {
+		// fgvm creates a "fgvm" subdirectory inside FGVM_HOME
+		return path.join(env, "fgvm");
 	}
 	return path.join(os.homedir(), "fgvm");
 }
