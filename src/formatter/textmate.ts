@@ -46,17 +46,21 @@ interface Token {
 	string?: boolean;
 	skip?: boolean;
 	identifier?: boolean;
+	inLambdaBody?: boolean;
 }
 
 export interface FormatterOptions {
-	maxEmptyLines: 0 | 1 | 2;
+	maxEmptyLines: number;
 	denseFunctionParameters: boolean;
 	spacesBeforeEndOfLineComment: 1 | 2;
 }
 
 function get_formatter_options() {
+	const rawMaxEmptyLines = get_configuration("formatter.maxEmptyLines");
+	const maxEmptyLines = typeof rawMaxEmptyLines === "number" ? Math.max(0, Math.round(rawMaxEmptyLines)) : 2;
+
 	const options: FormatterOptions = {
-		maxEmptyLines: get_configuration("formatter.maxEmptyLines") === "1" ? 1 : 2,
+		maxEmptyLines: maxEmptyLines,
 		denseFunctionParameters: get_configuration("formatter.denseFunctionParameters"),
 		spacesBeforeEndOfLineComment: get_configuration("formatter.spacesBeforeEndOfLineComment") === "1" ? 1 : 2,
 	};
@@ -92,21 +96,36 @@ function parse_token(token: Token) {
 		token.type = "keyword";
 		return;
 	}
+	// "preload" is highlighted as a keyword but it behaves like a function
+	if (token.value === "preload") {
+		return;
+	}
+	// "self" and "super" are highlighted as keywords but behave like identifiers
+	if (token.value === "self" || token.value === "super") {
+		token.type = "variable";
+		return;
+	}
+	// "signal" is a keyword in declarations but a value reference in expressions
+	// (e.g. yield(signal, "completed")). Trust the grammar scope.
+	if (token.value === "signal") {
+		if (token.scopes.includes("keyword.language.gdscript")) {
+			token.type = "keyword";
+		} else {
+			token.type = "variable";
+		}
+		return;
+	}
+	// "yield" is a keyword but behaves like a function call — no space before (
+	if (token.value === "yield") {
+		token.type = "keyword";
+		return;
+	}
 	if (keywords.includes(token.value)) {
 		token.type = "keyword";
 		return;
 	}
 	if (symbols.includes(token.value)) {
 		token.type = "symbol";
-		return;
-	}
-	// "preload" is highlighted as a keyword but it behaves like a function
-	if (token.value === "preload") {
-		return;
-	}
-	// "self" and "super" are highlighted as keywords but behaves like an identifier
-	if (token.value === "self" || token.value === "super") {
-		token.type = "variable";
 		return;
 	}
 	if (token.scopes.includes("keyword.language.gdscript")) {
@@ -148,7 +167,7 @@ function between(tokens: Token[], current: number, options: FormatterOptions) {
 	}
 	if (next === ".") return "";
 
-	if (nextToken.param) {
+	if (nextToken.param && !nextToken.inLambdaBody && !(prevToken?.inLambdaBody)) {
 		if (options.denseFunctionParameters) {
 			if (prev === "-" || prev === "+") {
 				if (tokens[current - 2]?.value === "=") return "";
@@ -195,6 +214,9 @@ function between(tokens: Token[], current: number, options: FormatterOptions) {
 		if ([",", "(", "["].includes(tokens[current - 2]?.value)) {
 			return "";
 		}
+		if (tokens[current - 2]?.value === "=") {
+			return "";
+		}
 		if (nextToken.identifier) return " ";
 		if (current === 1) return "";
 	}
@@ -204,6 +226,7 @@ function between(tokens: Token[], current: number, options: FormatterOptions) {
 		if (prev === "export") return "";
 		if (prev === "func") return "";
 		if (prev === "assert") return "";
+		if (prev === "yield") return "";
 	}
 
 	if (prev === ")" && nextToken.type === "keyword") return " ";
@@ -245,6 +268,11 @@ function is_comment(line: TextLine): boolean {
 	return line.text[line.firstNonWhitespaceCharacterIndex] === "#";
 }
 
+function is_merge_conflict_marker(line: TextLine): boolean {
+	const trimmed = line.text.trimStart();
+	return trimmed.startsWith("<<<<<<<") || trimmed.startsWith("=======") || trimmed.startsWith(">>>>>>>");
+}
+
 export function format_document(document: TextDocument, _options?: FormatterOptions): TextEdit[] {
 	// quit early if grammar is not loaded
 	if (!grammar) {
@@ -258,6 +286,7 @@ export function format_document(document: TextDocument, _options?: FormatterOpti
 	let lineTokens: vsctm.ITokenizeLineResult | undefined = undefined;
 	let onlyEmptyLinesSoFar = true;
 	let emptyLineCount = 0;
+	let inLambdaBody = false;
 	for (let lineNum = 0; lineNum < document.lineCount; lineNum++) {
 		const line = document.lineAt(lineNum);
 
@@ -297,6 +326,11 @@ export function format_document(document: TextDocument, _options?: FormatterOpti
 			continue;
 		}
 
+		// skip git merge conflict markers — formatting these corrupts them
+		if (is_merge_conflict_marker(line)) {
+			continue;
+		}
+
 		let nextLine = "";
 		lineTokens = grammar.tokenizeLine(line.text, lineTokens?.ruleStack ?? vsctm.INITIAL);
 
@@ -321,6 +355,31 @@ export function format_document(document: TextDocument, _options?: FormatterOpti
 				continue;
 			}
 			tokens.push(token);
+		}
+		// Track lambda bodies inside function call parameters.
+		// When func() appears as a call argument, everything after it until
+		// the closing ) of the outer call is a lambda body, and dense
+		// parameter formatting should not apply there.
+		let sawLambdaStart = false;
+		for (let i = 0; i < tokens.length; i++) {
+			if (tokens[i].value === "func" && tokens[i].param) {
+				sawLambdaStart = true;
+				inLambdaBody = true;
+			}
+			// The closing ) of the outer call is not in param scope.
+			// When we see it, we've exited the lambda body.
+			if (tokens[i].value === ")" && !tokens[i].param) {
+				inLambdaBody = false;
+			}
+			// Mark tokens inside the lambda body (but not the func/parens/colon
+			// that start it, which should still get dense formatting).
+			// The lambda start tokens (func, (, ), :) come before the body
+			// content, so we only mark tokens after the lambda start colon.
+			if (inLambdaBody && sawLambdaStart && tokens[i].value === ":") {
+				sawLambdaStart = false; // colon is structural, don't mark it
+			} else if (inLambdaBody && !sawLambdaStart) {
+				tokens[i].inLambdaBody = true;
+			}
 		}
 		for (let i = 0; i < tokens.length; i++) {
 			if (is_debug_mode()) log.debug(i, tokens[i].value, tokens[i]);
