@@ -10,6 +10,8 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
         godot_version: ["4.7", "4.5.1"]
     runs-on: ${{ matrix.os }}
+    env:
+      FGVM_HOME: ${{ runner.temp }}/fgvm
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -46,8 +48,13 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://github.com/patricktcoakley/fgvm/releases/latest/download/fgvm-win-x64.zip" -OutFile "fgvm.zip"
           Expand-Archive -Path "fgvm.zip" -DestinationPath "C:\fgvm"
-          "C:\fgvm\fgvm.exe" --version
           echo "C:\fgvm" | Out-File -Encoding ascii -FilePath $env:GITHUB_PATH
+
+      - name: Cache Godot installations
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/fgvm/installations
+          key: fgvm-${{ matrix.os }}-${{ matrix.godot_version }}
 
       - name: Install Godot ${{ matrix.godot_version }}
         run: fgvm install ${{ matrix.godot_version }}
