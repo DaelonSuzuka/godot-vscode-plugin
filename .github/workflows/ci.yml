@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
         godot_version: ["4.7", "4.5.1"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -24,20 +24,6 @@ jobs:
         run: |
           curl -fLO https://github.com/patricktcoakley/fgvm/releases/latest/download/fgvm-linux-x64.tar.gz
           tar -xzf fgvm-linux-x64.tar.gz
-          chmod +x fgvm
-          sudo mv fgvm /usr/local/bin/fgvm
-
-      - name: Install fgvm (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          arch=$(uname -m)
-          if [ "$arch" = "arm64" ]; then
-            archive=fgvm-osx-arm64.tar.gz
-          else
-            archive=fgvm-osx-x64.tar.gz
-          fi
-          curl -fLO "https://github.com/patricktcoakley/fgvm/releases/latest/download/$archive"
-          tar -xzf "$archive"
           chmod +x fgvm
           sudo mv fgvm /usr/local/bin/fgvm
 
