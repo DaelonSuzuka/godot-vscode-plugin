@@ -7,3 +7,4 @@ workspace.code-workspace
 .godot
 *.tmp
 lode/
+test_projects/*/.vscode/settings.json

@@ -8,6 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
+        godot_version: ["4.7", "4.5.1"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -18,41 +19,49 @@ jobs:
         with:
           node-version: 22.x
 
-      - name: Install Godot (Ubuntu)
+      - name: Install fgvm (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          wget https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip
-          unzip Godot_v4.5.1-stable_linux.x86_64.zip
-          sudo mv Godot_v4.5.1-stable_linux.x86_64 /usr/local/bin/godot
-          chmod +x /usr/local/bin/godot
+          curl -fLO https://github.com/patricktcoakley/fgvm/releases/latest/download/fgvm-linux-x64.tar.gz
+          tar -xzf fgvm-linux-x64.tar.gz
+          chmod +x fgvm
+          sudo mv fgvm /usr/local/bin/fgvm
 
-      - name: Install Godot (macOS)
+      - name: Install fgvm (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          curl -L -o Godot.zip https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_macos.universal.zip
-          unzip Godot.zip
-          sudo mv Godot.app /Applications/Godot.app
-          sudo ln -s /Applications/Godot.app/Contents/MacOS/Godot /usr/local/bin/godot
+          arch=$(uname -m)
+          if [ "$arch" = "arm64" ]; then
+            archive=fgvm-osx-arm64.tar.gz
+          else
+            archive=fgvm-osx-x64.tar.gz
+          fi
+          curl -fLO "https://github.com/patricktcoakley/fgvm/releases/latest/download/$archive"
+          tar -xzf "$archive"
+          chmod +x fgvm
+          sudo mv fgvm /usr/local/bin/fgvm
 
-      - name: Install Godot (Windows)
+      - name: Install fgvm (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_win64.exe.zip" -OutFile "Godot.zip"
-          Expand-Archive -Path "Godot.zip" -DestinationPath "C:\Godot451"
-          "C:\Godot451\Godot_v4.5.1-stable_win64.exe %*" | Out-File -Encoding ascii -FilePath ([Environment]::SystemDirectory+"\godot.cmd")
+          Invoke-WebRequest -Uri "https://github.com/patricktcoakley/fgvm/releases/latest/download/fgvm-win-x64.zip" -OutFile "fgvm.zip"
+          Expand-Archive -Path "fgvm.zip" -DestinationPath "C:\fgvm"
+          "C:\fgvm\fgvm.exe" --version
+          echo "C:\fgvm" | Out-File -Encoding ascii -FilePath $env:GITHUB_PATH
+
+      - name: Install Godot ${{ matrix.godot_version }}
+        run: fgvm install ${{ matrix.godot_version }}
 
       - name: Install dependencies
         run: npm install
 
-      - name: Godot init project
-        run: godot --import test_projects/test-dap-project-godot4/project.godot --headless
-
-      - name: Run headless test
+      - name: Run tests against Godot ${{ matrix.godot_version }}
         uses: coactions/setup-xvfb@v1
         with:
           run: |
-            npm run compile
-            npm test
+            npm run test:engine -- ${{ matrix.godot_version }}
+        env:
+          GODOT_TOOLS_DEBUG: "false"
 
   build:
     runs-on: ubuntu-latest
