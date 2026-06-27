@@ -14,7 +14,7 @@
 	},
 	"files": {
 		"include": ["src/**/*.ts", "tools/**/*.ts"],
-		"ignore": ["node_modules"]
+		"ignore": ["node_modules", "src/dev/**"]
 	},
 	"linter": {
 		"rules": {
