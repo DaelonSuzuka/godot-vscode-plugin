@@ -267,8 +267,15 @@ export default class GDScriptLanguageClient extends LanguageClient {
 
 	private async check_workspace(message: ChangeWorkspaceNotification) {
 		const server_path = path.normalize(message.params.path);
-		const client_path = path.normalize(await get_project_dir() ?? "");
-		if (server_path !== client_path) {
+		const client_path = path.normalize((await get_project_dir()) ?? "");
+
+		// Allow the client workspace to be a subfolder of the server's project.
+		// The LSP server reports the real project root (where project.godot lives),
+		// but the user may have opened a subfolder of the project in VS Code.
+		const is_subfolder = client_path.startsWith(server_path + path.sep);
+		const is_same = client_path === server_path;
+
+		if (!is_same && !is_subfolder) {
 			log.warn("Connected LSP is a different workspace");
 			this.io.socket?.resetAndDestroy();
 			this.rejected = true;

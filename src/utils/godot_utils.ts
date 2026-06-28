@@ -27,9 +27,6 @@ export async function get_project_dir(): Promise<string | undefined> {
 	if (vscode.workspace.workspaceFolders !== undefined) {
 		const files = await vscode.workspace.findFiles("**/project.godot", null);
 
-		if (files.length === 0) {
-			return undefined;
-		}
 		if (files.length === 1) {
 			file = files[0].fsPath;
 			if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
@@ -44,7 +41,17 @@ export async function get_project_dir(): Promise<string | undefined> {
 					return undefined;
 				}
 			}
+		} else {
+			// No project.godot found in workspace — walk up from workspace folder
+			const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+			const found = find_project_file(workspacePath);
+			if (found) {
+				file = found;
+			}
 		}
+	}
+	if (!file) {
+		return undefined;
 	}
 	projectFile = file;
 	projectDir = path.dirname(file);
