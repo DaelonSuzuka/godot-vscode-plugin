@@ -16,6 +16,7 @@ import {
 import { ClientConnectionManager } from "./lsp";
 import { ScenePreviewProvider } from "./scene_tools";
 import { GodotDebugger } from "./debugger";
+import { DebugServer } from "./dev/debug_server";
 import { FormattingProvider } from "./formatter";
 import {
 	get_configuration,
@@ -28,6 +29,7 @@ import {
 	get_project_version,
 	verify_godot_version,
 	convert_uri_to_resource_path,
+	is_debug_mode,
 } from "./utils";
 import { prompt_for_godot_executable } from "./utils/prompts";
 import { killSubProcesses, subProcess } from "./utils/subspawn";
@@ -47,6 +49,7 @@ interface Extension {
 	semanticTokensProvider?: GDSemanticTokensProvider;
 	completionProvider?: GDCompletionItemProvider;
 	tasksProvider?: GDTaskProvider;
+	devServer?: DebugServer;
 }
 
 export const globals: Extension = {};
@@ -68,6 +71,16 @@ export function activate(context: vscode.ExtensionContext) {
 	// globals.semanticTokensProvider = new GDSemanticTokensProvider(context);
 	// globals.completionProvider = new GDCompletionItemProvider(context);
 	// globals.tasksProvider = new GDTaskProvider(context);
+
+	// Start dev debug server if in debug mode
+	if (is_debug_mode()) {
+		const devServer = new DebugServer();
+		devServer.start().then((port) => {
+			if (port > 0) {
+				globals.devServer = devServer;
+			}
+		});
+	}
 
 	context.subscriptions.push(
 		register_command("openEditor", open_workspace_with_editor),
