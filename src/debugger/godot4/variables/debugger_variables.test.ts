@@ -489,6 +489,77 @@ suite("DAP Integration Tests - Variable Scopes", () => {
 		);
 	})?.timeout(10000);
 
+	test("should expand typed dictionaries with correct keys and values", async () => {
+		const breakpointLocations = await getBreakpointLocations(path.join(workspaceFolder, "BuiltInTypes.gd"));
+		const breakpoint = new vscode.SourceBreakpoint(breakpointLocations["breakpoint::BuiltInTypes::_ready"]);
+		vscode.debug.addBreakpoints([breakpoint]);
+
+		await startDebugging("BuiltInTypes.tscn");
+		await waitForBreakpoint(breakpoint, 2000);
+		await sleep(2000);
+
+		const variables = await getVariablesForScope(VariableScope.Locals);
+
+		// typed_dict: Dictionary[Vector2i, Array] = { Vector2i(11,12): [Vector3i(11,12,13), Vector3i(21,22,23)] }
+		const typed_dict = variables.find((v) => v.name === "typed_dict");
+		expect(typed_dict).to.exist;
+		assert(typed_dict);
+		expect(typed_dict.value).to.equal("Dictionary(1)");
+		expect(typed_dict.variablesReference).to.be.greaterThan(0);
+
+		const typed_dict_entries = await getVariablesForVSCodeID(typed_dict.variablesReference);
+		expect(typed_dict_entries.length).to.equal(1);
+		const entry = typed_dict_entries[0];
+		// Key is Vector2i(11, 12)
+		expect(entry.name).to.match(/Vector2i\(11, 12\)/);
+		expect(entry.variablesReference).to.be.greaterThan(0);
+
+		// Value is an array of Vector3i
+		const typed_dict_value = await getVariablesForVSCodeID(entry.variablesReference);
+		expect(typed_dict_value.length).to.equal(2);
+		expect(typed_dict_value[0].name).to.equal("0");
+		expect(typed_dict_value[0].value).to.equal("Vector3i(11, 12, 13)");
+		expect(typed_dict_value[1].name).to.equal("1");
+		expect(typed_dict_value[1].value).to.equal("Vector3i(21, 22, 23)");
+
+		// stringname_key_dict: Dictionary[StringName, StringName] = { &"stringname_key": &"stringname value" }
+		const stringname_key_dict = variables.find((v) => v.name === "stringname_key_dict");
+		expect(stringname_key_dict).to.exist;
+		assert(stringname_key_dict);
+		expect(stringname_key_dict.value).to.equal("Dictionary(1)");
+		expect(stringname_key_dict.variablesReference).to.be.greaterThan(0);
+
+		const sn_dict_entries = await getVariablesForVSCodeID(stringname_key_dict.variablesReference);
+		expect(sn_dict_entries.length).to.equal(1);
+		expect(sn_dict_entries[0].name).to.equal("&'stringname_key'");
+		expect(sn_dict_entries[0].value).to.equal("&'stringname value'");
+
+		// Also verify the untyped nested_dict expands correctly
+		const nested_dict = variables.find((v) => v.name === "nested_dict");
+		expect(nested_dict).to.exist;
+		assert(nested_dict);
+		expect(nested_dict.value).to.equal("Dictionary(2)");
+		expect(nested_dict.variablesReference).to.be.greaterThan(0);
+
+		const nested_dict_entries = await getVariablesForVSCodeID(nested_dict.variablesReference);
+		expect(nested_dict_entries.length).to.equal(2);
+		// "nested_key" -> "Nested Value"
+		const nested_key_entry = nested_dict_entries.find((e) => e.name.includes("nested_key"));
+		expect(nested_key_entry).to.exist;
+		assert(nested_key_entry);
+		expect(nested_key_entry.value).to.equal("'Nested Value'");
+		// "sub_dict" -> { "sub_key": 99 }
+		const sub_dict_entry = nested_dict_entries.find((e) => e.name.includes("sub_dict"));
+		expect(sub_dict_entry).to.exist;
+		assert(sub_dict_entry);
+		expect(sub_dict_entry.variablesReference).to.be.greaterThan(0);
+
+		const sub_dict_values = await getVariablesForVSCodeID(sub_dict_entry.variablesReference);
+		expect(sub_dict_values.length).to.equal(1);
+		expect(sub_dict_values[0].name).to.match(/sub_key/);
+		expect(sub_dict_values[0].value).to.equal("99");
+	})?.timeout(15000);
+
 	test("should retrieve all complex variables correctly", async () => {
 		const breakpointLocations = await getBreakpointLocations(path.join(workspaceFolder, "ExtensiveVars.gd"));
 		const breakpoint = new vscode.SourceBreakpoint(breakpointLocations["breakpoint::ExtensiveVars::_ready"]);

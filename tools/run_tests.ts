@@ -3,11 +3,12 @@
  * Test runner for engine-in-the-loop tests.
  *
  * Usage:
- *   ts-node tools/run_tests.ts <version> [--godot3]
+ *   ts-node tools/run_tests.ts <version> [grep pattern] [--godot3]
  *
  * Example:
- *   ts-node tools/run_tests.ts 4.7              # Test against Godot 4.7
- *   ts-node tools/run_tests.ts 3.6.2 --godot3   # Test against Godot 3.6.2
+ *   ts-node tools/run_tests.ts 4.7                          # All tests against Godot 4.7
+ *   ts-node tools/run_tests.ts 4.7 "typed dict"             # Only matching tests
+ *   ts-node tools/run_tests.ts 3.6.2 --godot3               # Test against Godot 3.6.2
  *
  * Resolves the Godot binary from fgvm's installation directory,
  * writes a .vscode/settings.json into the test project with the
@@ -24,19 +25,22 @@ const execFileAsync = promisify(execFile);
 
 const TEST_PROJECT_GODOT4 = path.resolve("test_projects/test-dap-project-godot4");
 
-function parse_args(): { version: string; isGodot3: boolean } {
+function parse_args(): { version: string; isGodot3: boolean; grep?: string } {
 	const args = process.argv.slice(2);
 	if (args.length === 0) {
-		console.error("Usage: ts-node tools/run_tests.ts <version> [--godot3]");
+		console.error("Usage: ts-node tools/run_tests.ts <version> [grep pattern] [--godot3]");
 		console.error("Example: ts-node tools/run_tests.ts 4.7");
+		console.error('         ts-node tools/run_tests.ts 4.7 "typed dict"');
 		console.error("         ts-node tools/run_tests.ts 3.6.2 --godot3");
 		process.exit(1);
 	}
 
 	const version = args[0];
 	const isGodot3 = args.includes("--godot3");
+	// Second positional arg (if not a flag) is the grep pattern
+	const grep = args.slice(1).find((a) => !a.startsWith("--"));
 
-	return { version, isGodot3 };
+	return { version, isGodot3, grep };
 }
 
 function write_test_settings(projectDir: string, settingKey: string, binaryPath: string): void {
@@ -57,7 +61,7 @@ function write_test_settings(projectDir: string, settingKey: string, binaryPath:
 }
 
 async function main() {
-	const { version, isGodot3 } = parse_args();
+	const { version, isGodot3, grep } = parse_args();
 
 	// 1. Resolve the binary path
 	const binaryPath = resolve_godot_binary(version);
@@ -94,7 +98,13 @@ async function main() {
 	if (process.env.GODOT_TOOLS_DEBUG !== "false") {
 		testEnv.VSCODE_DEBUG_MODE = "true";
 	}
-	const testProcess = execFile("npm", ["test"], {
+
+	const testArgs = ["test"];
+	if (grep) {
+		testArgs.push("--", "--grep", grep);
+	}
+
+	const testProcess = execFile("npm", testArgs, {
 		shell: true,
 		cwd: path.resolve(__dirname, ".."),
 		env: testEnv,
