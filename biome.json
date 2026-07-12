@@ -27,5 +27,24 @@
                 "noExplicitAny": "off"
             }
 		}
-	}
+	},
+	"overrides": [
+		{
+			"include": ["src/gdscript/**"],
+			"linter": {
+				"rules": {
+					"nursery": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"paths": {
+									"vscode": "src/gdscript is a vscode-free zone: core must run outside the extension host"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	]
 }
