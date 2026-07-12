@@ -1,4 +1,5 @@
-// Stress the GDScript lexer + formatter v2 engine over external corpora.
+// Stress the GDScript lexer + formatter v2 engine AND the tscn parser over
+// external corpora.
 //
 //   npm run test:corpus -- <dir> [<dir> ...]
 //
@@ -9,15 +10,20 @@
 // and reports files containing ERROR tokens, split into expected (inside an
 // errors/ directory — engine-repo negative tests) and unexpected.
 //
+// For every .tscn/.tres file it asserts interpret_scene() never throws and
+// reports parser warnings (skipped/unparseable constructs) — a warning on a
+// file Godot itself wrote means the scene format grew and src/tscn/ needs
+// updating (see lode/gdscript/grammar-watch.md).
+//
 // Good corpora: your own game projects, and the Godot engine repo's
-// modules/gdscript/tests/scripts (check out several stable tags as worktrees —
-// see lode/gdscript/grammar-watch.md).
+// modules/gdscript/tests/scripts (check out several stable tags as worktrees).
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { tokenize } from "../src/gdscript/lexer/lexer";
 import { TokenKind } from "../src/gdscript/lexer/tokens";
 import { format_source } from "../src/gdscript/formatter/engine";
+import { interpret_scene } from "../src/tscn/scene";
 
 const dirs = process.argv.slice(2);
 if (dirs.length === 0) {
@@ -26,6 +32,7 @@ if (dirs.length === 0) {
 }
 
 const files: string[] = [];
+const sceneFiles: string[] = [];
 function walk(dir: string) {
 	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
 		const full = path.join(dir, entry.name);
@@ -33,6 +40,8 @@ function walk(dir: string) {
 			walk(full);
 		} else if (entry.name.endsWith(".gd")) {
 			files.push(full);
+		} else if (entry.name.endsWith(".tscn") || entry.name.endsWith(".tres")) {
+			sceneFiles.push(full);
 		}
 	}
 }
@@ -79,11 +88,29 @@ for (const file of files) {
 	}
 }
 
-console.log(`files: ${files.length}, ok: ${ok}, time: ${Date.now() - t0}ms`);
+let sceneOk = 0;
+const sceneThrows: string[] = [];
+const sceneWarnings: string[] = [];
+for (const file of sceneFiles) {
+	try {
+		const scene = interpret_scene(fs.readFileSync(file, "utf8"));
+		for (const w of scene.warnings) {
+			sceneWarnings.push(`${file}: ${w}`);
+		}
+		sceneOk++;
+	} catch (e) {
+		sceneThrows.push(`${file} :: ${(e as Error).message}`);
+	}
+}
+
+console.log(`gd files: ${files.length}, ok: ${ok}, time: ${Date.now() - t0}ms`);
 console.log(`round-trip mismatches: ${mismatches.length}, throws: ${throws.length}`);
 console.log(`idempotency violations: ${notIdempotent.length}`);
 console.log(`ERROR tokens: ${errExpected} in error-dirs (expected), ${errUnexpected.length} elsewhere`);
-const bad = [...mismatches, ...throws, ...notIdempotent, ...errUnexpected];
+console.log(
+	`scene files: ${sceneFiles.length}, ok: ${sceneOk}, throws: ${sceneThrows.length}, warnings: ${sceneWarnings.length}`,
+);
+const bad = [...mismatches, ...throws, ...notIdempotent, ...errUnexpected, ...sceneThrows, ...sceneWarnings];
 for (const b of bad.slice(0, 20)) {
 	console.log("  !!", b);
 }
