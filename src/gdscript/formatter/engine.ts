@@ -130,39 +130,19 @@ function classify(token: Token): STok {
 			s.skip = true;
 			break;
 		case TokenKind.NodePathString:
+		case TokenKind.StringName:
+			// v1's grammar scopes all of $ % & ^ @ + quote as nodepath literals
 			s.type = "nodepath";
 			s.skip = true;
 			s.string = true;
 			break;
 		case TokenKind.String:
-		case TokenKind.StringName:
 			s.string = true;
 			break;
 		default:
 			break;
 	}
 	return s;
-}
-
-/** does this token end an expression (an operator after it would be binary)? */
-function can_end_expression(s: STok): boolean {
-	switch (s.token.kind) {
-		case TokenKind.Identifier:
-		case TokenKind.Number:
-		case TokenKind.String:
-		case TokenKind.StringName:
-		case TokenKind.NodePathString:
-		case TokenKind.NodePath:
-		case TokenKind.UniqueNode:
-		case TokenKind.ParenClose:
-		case TokenKind.BracketClose:
-		case TokenKind.BraceClose:
-			return true;
-		case TokenKind.Keyword:
-			return s.type === "variable" || s.type === "constant";
-		default:
-			return false;
-	}
 }
 
 /**

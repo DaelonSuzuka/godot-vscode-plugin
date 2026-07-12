@@ -30,3 +30,18 @@ tween.finished.connect(
 	func(x: int = 1):
 		_is_tween_playing = false
 )
+# --- END ---
+
+# Dense mode: unary signs, modulo, and default values
+
+# --- IN ---
+f(  -1 ,  +2 ,  a - b ,  a % b )
+# --- OUT ---
+f(-1, +2, a - b, a % b)
+
+# --- IN ---
+func g(  a = 1 ,  b : int = 2 ):
+	pass
+# --- OUT ---
+func g(a=1, b: int = 2):
+	pass

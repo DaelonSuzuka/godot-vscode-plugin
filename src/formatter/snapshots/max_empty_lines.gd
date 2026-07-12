@@ -70,3 +70,14 @@ func a():
 
 func b():
 	pass
+# --- END ---
+
+# Blank lines at the start of the file are deleted entirely
+
+# --- IN ---
+
+
+
+var leading_blanks_removed = true
+# --- OUT ---
+var leading_blanks_removed = true

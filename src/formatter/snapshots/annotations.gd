@@ -54,3 +54,11 @@ var dual_annotated = 5
 # --- OUT ---
 @onready @export
 var dual_annotated = 5
+# --- END ---
+
+# Multiple annotations on one line
+
+# --- IN ---
+@onready   @export var combo = 1
+# --- OUT ---
+@onready @export var combo = 1

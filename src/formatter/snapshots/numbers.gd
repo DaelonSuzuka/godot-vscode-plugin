@@ -31,3 +31,14 @@ var b = 4e-09
 var c = 58.1e-10
 var d = 58.1e+10
 var e = 9.732e-06
+# --- END ---
+
+# Integer literal bases and digit separators
+
+# --- IN ---
+var a = 0xFF_EC
+var b = 0b1010_0101
+var c = 1_000_000
+var d = -0xFF
+func f():
+	return 255 & 0xF0

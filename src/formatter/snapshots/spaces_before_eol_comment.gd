@@ -45,3 +45,17 @@ pass    ## Comment E.
 # --- OUT ---
 pass  # Comment D.
 pass  ## Comment E.
+# --- END ---
+
+# Comment content normalization: hash directly followed by text gains a space
+
+# --- CONFIG ALL ---
+{"spacesBeforeEndOfLineComment": 1}
+
+# --- IN ---
+pass #no_space_after_hash
+# --- OUT ---
+pass # no_space_after_hash
+
+# --- IN ---
+pass #
