@@ -22,9 +22,12 @@ var  b  =   'ten'
 var b = 'ten'
 ```
 
-## An `IN` block by itself will be reused at the `OUT` target
+## An `IN` block with no `OUT` block is an idempotency test — this is intentional
 
-Many test cases can simply be expressed as "do not change this":
+A missing `OUT` block is NOT an incomplete test case. The `IN` text is reused as the
+expected output, asserting "the formatter must not change this" — which also makes it
+the cheapest way to pin formatter stability (`format(x) == x`). Many test cases are
+best expressed exactly this way. Do not "fix" these by adding `OUT` blocks:
 
 ```
 # --- IN ---
