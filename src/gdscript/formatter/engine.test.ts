@@ -38,3 +38,10 @@ suite("gdscript formatter v2: engine-only behaviors", () => {
 		assert.strictEqual(format_source("   \n\t\n"), "");
 	});
 });
+
+suite("gdscript formatter v2: fixes over v1", () => {
+	test("string literals are never corrupted (v1 inserts a space in ',')", () => {
+		const src = "var x = value.replace(',', '.')\n";
+		assert.strictEqual(format_source(src), src);
+	});
+});

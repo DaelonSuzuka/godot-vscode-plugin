@@ -85,3 +85,10 @@ extends  Node
 # --- OUT ---
 class_name MyClass
 extends Node
+# --- END ---
+
+# Contextual keywords used as identifiers keep call spacing
+
+# --- IN ---
+func f():
+	print(match)

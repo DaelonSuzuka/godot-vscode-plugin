@@ -105,8 +105,9 @@ function classify(token: Token): STok {
 		case TokenKind.Keyword:
 			if (text === "self" || text === "super") {
 				s.type = "variable";
-			} else if (text === "signal") {
-				// keyword in declarations, value reference in expressions
+			} else if (text === "signal" || text === "match" || text === "trait") {
+				// contextual keywords: keyword at statement position, plain
+				// identifiers anywhere else (e.g. `print(match)` is legal)
 				s.type = token.statementStart ? "keyword" : "variable";
 			} else if (text === "preload") {
 				s.type = "none"; // behaves like a function call
@@ -300,6 +301,25 @@ export function format_source(source: string, options: FormatterOptions = defaul
 		}
 	}
 
+	// EOL comments indexed by physical line. Comments on lines whose newline
+	// was swallowed (inside brackets, after continuations) live in the NEXT
+	// token's leading trivia, not the previous token's trailing — without this
+	// index the rebuild would silently drop them (they're not comment-only
+	// lines, so the verbatim path doesn't save them either).
+	const commentByLine = new Map<number, string>();
+	for (const t of tokens) {
+		for (const tr of t.leading) {
+			if (tr.kind === "comment") {
+				commentByLine.set(tr.start.line, tr.text);
+			}
+		}
+		for (const tr of t.trailing) {
+			if (tr.kind === "comment") {
+				commentByLine.set(tr.start.line, tr.text);
+			}
+		}
+	}
+
 	const raw = source.split("\n");
 	const lines: Line[] = raw.map((text, i) => ({
 		text,
@@ -367,6 +387,15 @@ export function format_source(source: string, options: FormatterOptions = defaul
 			if (a.skip && (b.text === "/" || a.text.endsWith("/"))) {
 				b.skip = true;
 			}
+			// contextual keywords are also in statement position right after
+			// a colon/semicolon (`if true: match x:` — bug #858)
+			if (
+				(a.text === ":" || a.text === ";") &&
+				(b.text === "match" || b.text === "trait" || b.text === "signal") &&
+				b.token.kind === TokenKind.Keyword
+			) {
+				b.type = "keyword";
+			}
 		}
 
 		const indent = line.text.slice(0, line.text.length - trimmed.length);
@@ -381,12 +410,12 @@ export function format_source(source: string, options: FormatterOptions = defaul
 			out += group[i].text;
 		}
 
-		// EOL comment from the last token's trailing trivia
+		// EOL comment for this physical line (see commentByLine above)
 		const last = group[group.length - 1];
-		const comment = last.token.trailing.find((tr) => tr.kind === "comment");
+		const comment = commentByLine.get(n);
 		if (comment) {
 			out += options.spacesBeforeEndOfLineComment === 2 ? "  " : " ";
-			out += normalize_comment(comment.text);
+			out += normalize_comment(comment);
 		}
 
 		// line continuation: v1 keeps ` \` at end of line

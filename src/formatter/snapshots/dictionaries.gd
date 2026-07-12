@@ -40,3 +40,16 @@ func f():
 	var d = {}
 	d["key"] = value
 	d["key"] = value
+# --- END ---
+
+# EOL comments on continuation lines inside brackets must survive
+
+# --- IN ---
+var overrides = [
+	'_get', # probably
+	'emit_signal', # extra parameters
+]
+var lua = {
+	a = 1, # first
+	b = 2, # second
+}
