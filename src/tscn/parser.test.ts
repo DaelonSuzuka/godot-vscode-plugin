@@ -110,6 +110,27 @@ position = Vector2(1, 2)
 		assert.strictEqual(scene.externalResources.get("1")?.line, 1);
 	});
 
+	test("typed container literals (Godot 4.4+) — found hanging on demo corpus", () => {
+		const src = `[node name="Store" type="VSplitContainer" unique_id=967199979]
+script = ExtResource("1_s")
+inapp_products = Dictionary[String, Texture]({
+"blaster": ExtResource("8_j"),
+"sword": ExtResource("4_n")
+})
+levels = Array[int]([1, 2, 3])
+nested = Dictionary[String, Array[int]]({})
+`;
+		const scene = interpret_scene(src);
+		const store = scene.nodes.get("Store");
+		assert.strictEqual(store?.scriptId, "1_s");
+	});
+
+	test("malformed input throws instead of hanging (no-progress guard)", () => {
+		// unknown typed-container name: the [String, Texture] part gets read
+		// as a section header, whose comma must throw rather than spin
+		assert.throws(() => interpret_scene(`[node name="X"]\nx = Foo[String, Texture]({})\n`));
+	});
+
 	test("embedded Object(...) values with key:value arguments", () => {
 		const src = `[sub_resource type="AnimationNodeStateMachineTransition" id="t1"]
 advance_condition = Object(StringName,"name":"is_running")

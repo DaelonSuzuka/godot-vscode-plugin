@@ -70,6 +70,9 @@ export class TscnParser {
 		const sections: TscnSection[] = [];
 		this.skip_trivia();
 		while (this.pos < this.src.length) {
+			// hard termination guarantee: every iteration must consume input.
+			// A parser gap must become a thrown error, never a hang.
+			const before = this.pos;
 			if (this.peek() === "[") {
 				const section = this.parse_section_header();
 				if (sections.length > 0) {
@@ -86,6 +89,9 @@ export class TscnParser {
 				}
 			}
 			this.skip_trivia();
+			if (this.pos === before) {
+				throw this.error(`parser made no progress at ${JSON.stringify(this.peek())}`);
+			}
 		}
 		if (sections.length > 0) {
 			sections[sections.length - 1].endOffset = this.src.length;
@@ -153,6 +159,10 @@ export class TscnParser {
 				throw this.error(`unterminated section header [${tag}`);
 			}
 			const key = this.parse_key();
+			if (key === "") {
+				// refuse to loop on a character no rule consumes
+				throw this.error(`malformed section header [${tag}: unexpected ${JSON.stringify(c)}`);
+			}
 			this.skip_ws_inline();
 			if (this.peek() === "=") {
 				this.advance();
@@ -206,7 +216,8 @@ export class TscnParser {
 		let word = "";
 		for (;;) {
 			const c = this.peek();
-			if (/[A-Za-z0-9_/.\-]/.test(c) && c !== "") {
+			// ':' appears in TileSet atlas-coordinate keys: 0:0/1/flip_h = true
+			if (/[A-Za-z0-9_/.:\-]/.test(c) && c !== "") {
 				word += this.advance();
 			} else {
 				return word;
@@ -319,6 +330,22 @@ export class TscnParser {
 			name += this.advance();
 		}
 		this.skip_ws_inline();
+		// typed containers (Godot 4.4+): Dictionary[String, Texture]({...}),
+		// Array[int]([1, 2]) — consume the bracketed type parameters into the
+		// call name; the payload parses as a normal argument
+		if (this.peek() === "[" && (name === "Dictionary" || name === "Array")) {
+			let depth = 0;
+			do {
+				const c = this.advance();
+				name += c;
+				if (c === "[") depth++;
+				if (c === "]") depth--;
+				if (this.pos >= this.src.length) {
+					throw this.error(`unterminated type parameters on ${name}`);
+				}
+			} while (depth > 0);
+			this.skip_ws_inline();
+		}
 		if (this.peek() === "(") {
 			this.advance();
 			const args: TscnValue[] = [];
