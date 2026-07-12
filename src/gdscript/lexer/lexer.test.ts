@@ -412,6 +412,48 @@ suite("gdscript lexer: multiline lambdas", () => {
 	});
 });
 
+suite("gdscript lexer: termination + losslessness fuzz", () => {
+	// tokenize() must terminate and stay lossless on ANY input — malformed
+	// code becomes ERROR tokens, never a hang. Seeded for reproducibility.
+	function mulberry32(seed: number) {
+		let a = seed;
+		return () => {
+			a |= 0;
+			a = (a + 0x6d2b79f5) | 0;
+			let t = Math.imul(a ^ (a >>> 15), 1 | a);
+			t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+			return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+		};
+	}
+	const CHARS = "\"'`\\$%&^@#(){}[]:;,.->=+*/ \t\nfunc变量_0919";
+
+	test("random garbage round-trips losslessly", () => {
+		const rand = mulberry32(0x6d5c);
+		for (let i = 0; i < 2000; i++) {
+			const len = Math.floor(rand() * 200);
+			let s = "";
+			for (let j = 0; j < len; j++) {
+				s += CHARS[Math.floor(rand() * CHARS.length)];
+			}
+			roundtrip(s); // also proves termination
+		}
+	});
+
+	test("mutated real code round-trips losslessly", () => {
+		const rand = mulberry32(0xf00d);
+		const template =
+			'@tool\nextends Node\nfunc f(a: int = -1) -> void:\n\tx.connect(func():\n\t\tvar s = "a\\"b" % [$A/%B, &"n"]\n\t)\n';
+		for (let i = 0; i < 2000; i++) {
+			const pos = Math.floor(rand() * template.length);
+			const s =
+				rand() < 0.5
+					? template.slice(0, pos) + template.slice(pos + 1 + Math.floor(rand() * 10))
+					: template.slice(0, pos) + CHARS[Math.floor(rand() * CHARS.length)] + template.slice(pos);
+			roundtrip(s);
+		}
+	});
+});
+
 suite("gdscript lexer: round-trip properties", () => {
 	test("assorted snippets", () => {
 		const snippets = [

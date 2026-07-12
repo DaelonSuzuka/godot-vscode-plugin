@@ -153,6 +153,71 @@ input = Object(InputEventKey,"resource_local_to_scene":false,"keycode":32,"press
 	});
 });
 
+suite("tscn parser: termination fuzz", () => {
+	// The parser must terminate on ANY input — throwing is fine, hanging is
+	// not (a wedged parser wedges the editor). Deterministic seeded fuzz so
+	// failures reproduce; the no-progress guard in parse() is the backstop
+	// this exercises.
+	function mulberry32(seed: number) {
+		let a = seed;
+		return () => {
+			a |= 0;
+			a = (a + 0x6d2b79f5) | 0;
+			let t = Math.imul(a ^ (a >>> 15), 1 | a);
+			t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+			return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+		};
+	}
+
+	const template = `[gd_scene load_steps=2 format=3 uid="uid://x"]
+[ext_resource type="Script" path="res://a b(c).gd" id="1_a"]
+[sub_resource type="TileSet" id="t"]
+0:0/1/flip_h = true
+data = Dictionary[String, Array[int]]({"k": [1, 2], "j": Object(Thing,"p":3)})
+[node name="Root" type="Node2D"]
+script = ExtResource("1_a")
+text = "multi\\nline \\"str\\""
+`;
+	const CHARS = `[]{}()=:,;"'\\&-.0aZ_$%\n\t `;
+
+	test("random garbage terminates", () => {
+		const rand = mulberry32(0xdae101);
+		for (let i = 0; i < 2000; i++) {
+			const len = Math.floor(rand() * 200);
+			let s = "";
+			for (let j = 0; j < len; j++) {
+				s += CHARS[Math.floor(rand() * CHARS.length)];
+			}
+			try {
+				interpret_scene(s);
+			} catch {
+				// throwing is acceptable; hanging is the failure mode
+			}
+		}
+	});
+
+	test("mutated real scenes terminate", () => {
+		const rand = mulberry32(0x5eed);
+		for (let i = 0; i < 2000; i++) {
+			const pos = Math.floor(rand() * template.length);
+			const op = rand();
+			let s: string;
+			if (op < 0.4) {
+				s = template.slice(0, pos) + template.slice(pos + 1 + Math.floor(rand() * 20)); // delete run
+			} else if (op < 0.8) {
+				s = template.slice(0, pos) + CHARS[Math.floor(rand() * CHARS.length)] + template.slice(pos); // insert
+			} else {
+				s = template.slice(pos) + template.slice(0, pos); // rotate
+			}
+			try {
+				interpret_scene(s);
+			} catch {
+				// acceptable
+			}
+		}
+	});
+});
+
 suite("tscn parser: corpus", () => {
 	test("all test-project scenes and resources parse", function () {
 		this.timeout(10000);
