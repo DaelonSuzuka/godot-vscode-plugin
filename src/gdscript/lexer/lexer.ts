@@ -71,6 +71,10 @@ export class Lexer {
 	private lineHasSignificant = false;
 	/** previous emitted token was NEWLINE/INDENT/DEDENT (or file start) */
 	private lastWasLineBreak = true;
+	/** a backslash continuation is open: the logical line continues across
+	 * newlines (and across comment-only lines, per Godot GH-89403) until the
+	 * next significant token */
+	private pendingContinuation = false;
 
 	constructor(source: string) {
 		this.src = source;
@@ -94,6 +98,7 @@ export class Lexer {
 				let text = this.advance_text(1);
 				text += this.consume_newline_text();
 				this.push_ws(text);
+				this.pendingContinuation = true;
 				this.consume_physical_line_start(false);
 			} else if (c === "#") {
 				this.consume_comment();
@@ -209,6 +214,14 @@ export class Lexer {
 	}
 
 	private handle_newline() {
+		if (this.pendingContinuation) {
+			// comment-only/blank line inside an open continuation: the
+			// logical line is still going — swallow the newline
+			const start = this.here();
+			this.push_ws(this.consume_newline_text(), start);
+			this.consume_physical_line_start(false);
+			return;
+		}
 		if (this.awaitingLambdaBlock) {
 			// `func (...) :` header followed by a newline: the body block starts
 			this.awaitingLambdaBlock = false;
@@ -331,6 +344,7 @@ export class Lexer {
 		token.statementStart = this.lastWasLineBreak;
 		this.lastWasLineBreak = false;
 		this.lineHasSignificant = true;
+		this.pendingContinuation = false;
 		return token;
 	}
 
@@ -616,6 +630,10 @@ export class Lexer {
 
 	private scan_path_segments(): string {
 		let text = "";
+		// absolute paths: $/root/Child
+		while (this.peek() === "/") {
+			text += this.advance_text(1);
+		}
 		for (;;) {
 			if (this.peek() === "%") {
 				text += this.advance_text(1);

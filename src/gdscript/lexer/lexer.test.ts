@@ -184,6 +184,26 @@ suite("gdscript lexer: structure", () => {
 		assert.deepEqual(structure("x = 1 + \\\n\t2\n"), ["x", "=", "1", "+", "2", "NL", "EOF"]);
 	});
 
+	test("continuation survives comment-only lines (Godot GH-89403)", () => {
+		const src = "if x == 0 \\\n\t# c1\n\t# c2\n\tand y:\n\tpass\n";
+		assert.deepEqual(structure(src), [
+			"if",
+			"x",
+			"==",
+			"0",
+			"and",
+			"y",
+			":",
+			"NL",
+			"IN",
+			"pass",
+			"NL",
+			"DE",
+			"EOF",
+		]);
+		roundtrip(src);
+	});
+
 	test("statementStart marks first token of logical lines only", () => {
 		const tokens = sig("x = f(\n\ta)\ny = 2\n");
 		const starts = tokens.filter((t) => t.statementStart).map((t) => t.text);
