@@ -1,5 +1,5 @@
 // Plain-node tests for the GDScript union lexer — no VS Code host required.
-// Run with: npm run test:lexer
+// Run with: npm run test:unit
 
 import { assert } from "chai";
 import * as fs from "node:fs";

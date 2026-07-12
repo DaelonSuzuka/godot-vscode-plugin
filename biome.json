@@ -30,7 +30,7 @@
 	},
 	"overrides": [
 		{
-			"include": ["src/gdscript/**"],
+			"include": ["src/gdscript/**", "src/tscn/**"],
 			"linter": {
 				"rules": {
 					"nursery": {

@@ -1,5 +1,5 @@
 // Plain-node snapshot tests for the v2 formatter engine — no VS Code host.
-// Run with: npm run test:lexer (picks up out/gdscript/**/*.test.js)
+// Run with: npm run test:unit (picks up out/gdscript/**/*.test.js)
 //
 // Shares the fixture corpus with the v1 formatter (src/formatter/snapshots/).
 // Differences from the v1 runner (formatter.test.ts), all deliberate:

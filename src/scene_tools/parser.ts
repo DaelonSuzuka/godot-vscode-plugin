@@ -1,14 +1,22 @@
 import * as fs from "node:fs";
 import { basename, extname } from "node:path";
 import { TextDocument, Uri } from "vscode";
-import { SceneNode, Scene, SceneResource } from "./types";
+import { interpret_scene } from "../tscn/scene";
 import { createLogger } from "../utils";
+import { Scene, SceneNode } from "./types";
 
 const log = createLogger("scenes.parser");
+
+interface CacheEntry {
+	scene: Scene;
+	mtime: number;
+	version: number;
+}
 
 export class SceneParser {
 	private static instance: SceneParser;
 	public scenes: Map<string, Scene> = new Map();
+	private cache: Map<string, CacheEntry> = new Map();
 
 	constructor() {
 		if (SceneParser.instance) {
@@ -20,165 +28,94 @@ export class SceneParser {
 
 	public parse_scene(document: TextDocument): Scene {
 		const filePath = document.uri.fsPath;
-		const stats = fs.statSync(filePath); // can throw
+		let mtime = 0;
+		try {
+			mtime = fs.statSync(filePath).mtimeMs;
+		} catch {
+			// untitled/virtual documents have no file behind them
+		}
 
-		if (this.scenes.has(filePath)) {
-			const existingScene = this.scenes.get(filePath);
-
-			if (existingScene && existingScene.mtime === stats.mtimeMs) {
-				return existingScene;
-			}
+		// valid only for the same file state AND the same buffer state —
+		// document.version catches unsaved edits that mtime cannot see
+		const cached = this.cache.get(filePath);
+		if (cached && cached.mtime === mtime && cached.version === document.version) {
+			return cached.scene;
 		}
 
 		const scene = new Scene();
 		scene.path = filePath;
-		scene.mtime = stats.mtimeMs;
+		scene.mtime = mtime;
 		scene.title = basename(filePath);
-
 		this.scenes.set(filePath, scene);
+		this.cache.set(filePath, { scene, mtime, version: document.version });
 
 		const text = document.getText();
-
-		for (const match of text.matchAll(/\[ext_resource.*/g)) {
-			const line = match[0];
-			const type = line.match(/type="([\w]+)"/)?.[1];
-			const resPath = line.match(/path="([\w.:/]+)"/)?.[1];
-			const uid = line.match(/uid="([\w:/]+)"/)?.[1];
-			const id = line.match(/ id="?([\w]+)"?/)?.[1];
-
-			if (id && match.index !== undefined) {
-				scene.externalResources.set(id, {
-					body: line,
-					path: resPath || "",
-					type: type || "",
-					uid: uid || "",
-					id: id,
-					index: match.index,
-					line: document.lineAt(document.positionAt(match.index)).lineNumber + 1,
-				});
-			}
+		let data: ReturnType<typeof interpret_scene>;
+		try {
+			data = interpret_scene(text);
+		} catch (e) {
+			// mid-edit files can be transiently unparseable; an empty scene is
+			// better than a stale or crashed provider
+			log.warn(`failed to parse ${filePath}: ${e}`);
+			return scene;
+		}
+		for (const warning of data.warnings) {
+			log.debug(`${filePath}: ${warning}`);
 		}
 
-		let lastResource: SceneResource | undefined = undefined;
-		for (const match of text.matchAll(/\[sub_resource.*/g)) {
-			if (match.index === undefined) {
-				continue;
-			}
-			const line = match[0];
-			const type = line.match(/type="([\w]+)"/)?.[1];
-			const resPath = line.match(/path="([\w.:/]+)"/)?.[1];
-			const uid = line.match(/uid="([\w:/]+)"/)?.[1];
-			const id = line.match(/ id="?([\w]+)"?/)?.[1];
-			const resource: SceneResource = {
-				path: resPath || "",
-				type: type || "",
-				uid: uid || "",
-				id: id || "",
-				index: match.index,
-				line: document.lineAt(document.positionAt(match.index)).lineNumber + 1,
-				body: "",
-			};
-			if (lastResource) {
-				lastResource.body = text.slice(lastResource.index, match.index).trimEnd();
-			}
-
-			if (id) {
-				scene.subResources.set(id, resource);
-			}
-			lastResource = resource;
+		for (const [id, res] of data.externalResources) {
+			scene.externalResources.set(id, { ...res, index: res.offset });
+		}
+		for (const [id, res] of data.subResources) {
+			scene.subResources.set(id, { ...res, index: res.offset });
 		}
 
-		let root = "";
-		const nodes: Record<string, SceneNode> = {};
-		let lastNode: SceneNode | undefined = undefined;
+		const nodesByPath: Record<string, SceneNode> = {};
+		for (const [path, n] of data.nodes) {
+			const node = new SceneNode(n.name, n.type);
+			node.path = path;
+			node.description = n.type;
+			node.relativePath = n.relativePath;
+			node.parent = n.parentPath;
+			node.text = n.header;
+			node.position = n.offset;
+			node.body = n.body;
+			node.resourceUri = Uri.from({ scheme: "godot", path });
 
-		const nodeRegex = /\[node.*/g;
-		for (const match of text.matchAll(nodeRegex)) {
-			if (match.index === undefined) {
-				continue;
-			}
-			const line = match[0];
-			const name = line.match(/name="([^.:@/"%]+)"/)?.[1] || "unknown";
-			const type = line.match(/type="([\w]+)"/)?.[1] ?? "PackedScene";
-			let parent = line.match(/parent="(([^.:@/"%]|[\/.])+)"/)?.[1];
-			const instance = line.match(/instance=ExtResource\(\s*"?([\w]+)"?\s*\)/)?.[1];
-
-			// leaving this in case we have a reason to use these node paths in the future
-			// const rawNodePaths = line.match(/node_paths=PackedStringArray\(([\w",\s]*)\)/)?.[1];
-			// const nodePaths = rawNodePaths?.split(",").forEach(x => x.trim().replace("\"", ""));
-
-			let _path = "";
-			let relativePath = "";
-
-			if (parent === undefined) {
-				root = name;
-				_path = name;
-				parent = "";
-			} else if (parent === ".") {
-				parent = root;
-				relativePath = name;
-				_path = `${parent}/${name}`;
-			} else {
-				relativePath = `${parent}/${name}`;
-				parent = `${root}/${parent}`;
-				_path = `${parent}/${name}`;
-			}
-			if (lastNode) {
-				lastNode.body = text.slice(lastNode.position, match.index);
-				lastNode.parse_body();
-			}
-			if (lastResource) {
-				lastResource.body = text.slice(lastResource.index, match.index).trimEnd();
-				lastResource = undefined;
-			}
-
-			const node = new SceneNode(name, type);
-			node.path = _path;
-			node.description = type;
-			node.relativePath = relativePath;
-			node.parent = parent;
-			node.text = match[0];
-			node.position = match.index;
-			node.resourceUri = Uri.from({
-				scheme: "godot",
-				path: _path,
-			});
-			scene.nodes.set(_path, node);
-
-			if (instance) {
-				const res = scene.externalResources.get(instance);
+			if (n.instanceId) {
+				const res = scene.externalResources.get(n.instanceId);
 				if (res) {
 					node.tooltip = res.path;
 					node.resourcePath = res.path;
-					if ([".tscn"].includes(extname(node.resourcePath))) {
+					if (extname(node.resourcePath) === ".tscn") {
 						node.contextValue += "openable";
 					}
 				}
 				node.contextValue += "hasResourcePath";
 			}
-			if (_path === root) {
+
+			node.parse_body();
+
+			// parsed values win over parse_body's line regexes
+			node.unique = n.uniqueNameInOwner;
+			if (n.scriptId) {
+				node.hasScript = true;
+				node.scriptId = n.scriptId;
+				if (!node.contextValue?.includes("hasScript")) {
+					node.contextValue += "hasScript";
+				}
+			}
+
+			scene.nodes.set(path, node);
+			if (path === data.rootPath) {
 				scene.root = node;
 			}
-			if (parent in nodes) {
-				nodes[parent].children.push(node);
+			if (n.parentPath in nodesByPath) {
+				nodesByPath[n.parentPath].children.push(node);
 			}
-			nodes[_path] = node;
-
-			lastNode = node;
+			nodesByPath[path] = node;
 		}
 
-		if (lastNode) {
-			lastNode.body = text.slice(lastNode.position, text.length);
-			lastNode.parse_body();
-		}
-
-		const resourceRegex = /\[resource\]/g;
-		for (const match of text.matchAll(resourceRegex)) {
-			if (lastResource) {
-				lastResource.body = text.slice(lastResource.index, match.index).trimEnd();
-				lastResource = undefined;
-			}
-		}
 		return scene;
 	}
 }
