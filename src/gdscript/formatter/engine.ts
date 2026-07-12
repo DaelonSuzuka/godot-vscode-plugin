@@ -31,6 +31,25 @@ export const defaultOptions: FormatterOptions = {
 	spacesBeforeEndOfLineComment: 1,
 };
 
+/** Sanitize raw user-configuration values into FormatterOptions — v1's
+ * get_formatter_options() semantics, kept vscode-free so it's unit-testable.
+ * (`spacesBeforeEndOfLineComment` is a string enum in settings.) */
+export function normalize_options(raw: {
+	maxEmptyLines?: unknown;
+	denseFunctionParameters?: unknown;
+	spacesBeforeEndOfLineComment?: unknown;
+}): FormatterOptions {
+	return {
+		maxEmptyLines:
+			typeof raw.maxEmptyLines === "number" && Number.isFinite(raw.maxEmptyLines)
+				? Math.max(0, Math.round(raw.maxEmptyLines))
+				: 2,
+		denseFunctionParameters: raw.denseFunctionParameters === true,
+		spacesBeforeEndOfLineComment:
+			raw.spacesBeforeEndOfLineComment === "1" || raw.spacesBeforeEndOfLineComment === 1 ? 1 : 2,
+	};
+}
+
 /** v1's `symbols` list, verbatim — membership defines type "symbol" for
  * spacing purposes. Notably absent: `=`, `!`, `~` (explicit rules instead). */
 const SYMBOLS = new Set([
@@ -261,9 +280,10 @@ function normalize_comment(text: string): string {
 }
 
 interface Line {
+	/** line content without its terminator (no trailing \r) */
 	text: string;
-	/** line was followed by \n in the source */
-	newline: boolean;
+	/** this line's terminator in the source: "\n", "\r\n", or "" (EOF) */
+	newline: string;
 	deleted: boolean;
 }
 
@@ -320,12 +340,19 @@ export function format_source(source: string, options: FormatterOptions = defaul
 		}
 	}
 
+	// split preserving each line's own terminator so CRLF documents come back
+	// CRLF (v1 edited line ranges, which preserved endings implicitly; we
+	// return whole-document text, so we must carry them ourselves)
 	const raw = source.split("\n");
-	const lines: Line[] = raw.map((text, i) => ({
-		text,
-		newline: i < raw.length - 1,
-		deleted: false,
-	}));
+	const lines: Line[] = raw.map((text, i) => {
+		const hasTerminator = i < raw.length - 1;
+		const crlf = text.endsWith("\r");
+		return {
+			text: crlf ? text.slice(0, -1) : text,
+			newline: hasTerminator ? (crlf ? "\r\n" : "\n") : "",
+			deleted: false,
+		};
+	});
 
 	let lastToken = "";
 	let onlyEmptyLinesSoFar = true;
@@ -436,10 +463,7 @@ export function format_source(source: string, options: FormatterOptions = defaul
 		if (line.deleted) {
 			continue;
 		}
-		result += line.text;
-		if (line.newline) {
-			result += "\n";
-		}
+		result += line.text + line.newline;
 	}
 	return result;
 }

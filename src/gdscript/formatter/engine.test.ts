@@ -2,7 +2,7 @@
 // (v1 reads the same fixtures and would format these differently or crash).
 
 import { assert } from "chai";
-import { format_source } from "./engine";
+import { format_source, normalize_options } from "./engine";
 
 suite("gdscript formatter v2: engine-only behaviors", () => {
 	test("lines with unlexable content are preserved verbatim", () => {
@@ -36,6 +36,35 @@ suite("gdscript formatter v2: engine-only behaviors", () => {
 		assert.strictEqual(format_source(""), "");
 		assert.strictEqual(format_source("\n\n\n"), "");
 		assert.strictEqual(format_source("   \n\t\n"), "");
+	});
+
+	test("CRLF documents stay CRLF, including rebuilt lines", () => {
+		const src = "var  a  =  1\r\nfunc f():\r\n\tpass\r\n";
+		const out = format_source(src);
+		assert.strictEqual(out, "var a = 1\r\nfunc f():\r\n\tpass\r\n");
+		assert.strictEqual(format_source(out), out);
+	});
+});
+
+suite("gdscript formatter v2: options normalization", () => {
+	test("maxEmptyLines clamps, rounds, and defaults", () => {
+		assert.strictEqual(normalize_options({ maxEmptyLines: 3.7 }).maxEmptyLines, 4);
+		assert.strictEqual(normalize_options({ maxEmptyLines: -5 }).maxEmptyLines, 0);
+		assert.strictEqual(normalize_options({ maxEmptyLines: "two" }).maxEmptyLines, 2);
+		assert.strictEqual(normalize_options({}).maxEmptyLines, 2);
+		assert.strictEqual(normalize_options({ maxEmptyLines: Number.NaN }).maxEmptyLines, 2);
+	});
+
+	test("spacesBeforeEndOfLineComment: settings string enum", () => {
+		assert.strictEqual(normalize_options({ spacesBeforeEndOfLineComment: "1" }).spacesBeforeEndOfLineComment, 1);
+		assert.strictEqual(normalize_options({ spacesBeforeEndOfLineComment: "2" }).spacesBeforeEndOfLineComment, 2);
+		assert.strictEqual(normalize_options({ spacesBeforeEndOfLineComment: 1 }).spacesBeforeEndOfLineComment, 1);
+	});
+
+	test("denseFunctionParameters must be literally true", () => {
+		assert.isTrue(normalize_options({ denseFunctionParameters: true }).denseFunctionParameters);
+		assert.isFalse(normalize_options({ denseFunctionParameters: "yes" }).denseFunctionParameters);
+		assert.isFalse(normalize_options({}).denseFunctionParameters);
 	});
 });
 
