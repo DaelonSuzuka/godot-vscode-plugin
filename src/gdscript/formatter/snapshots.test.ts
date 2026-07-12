@@ -79,7 +79,9 @@ function parse_test_file(content: string, fileName: string): TestCase[] {
 		outLines = [];
 	};
 
-	for (const rawLine of content.split("\n")) {
+	// normalize line endings only (CRLF checkouts on Windows) — unlike the v1
+	// runner, indentation is preserved
+	for (const rawLine of content.split("\n").map((l) => l.replace(/\r$/, ""))) {
 		const trimmed = rawLine.trim();
 		if (MODES.includes(trimmed)) {
 			if (trimmed === CONFIG || trimmed === IN) {
