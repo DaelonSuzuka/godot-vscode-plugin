@@ -330,6 +330,13 @@ export class TscnParser {
 			for (;;) {
 				args.push(this.parse_value());
 				this.skip_trivia();
+				// embedded objects serialize as Object(ClassName, "prop": value,
+				// ...) — key:value pairs as call arguments; consume the pair
+				if (this.peek() === ":") {
+					this.advance();
+					args.push(this.parse_value());
+					this.skip_trivia();
+				}
 				const c = this.advance();
 				if (c === ")") {
 					return { kind: "call", name, args };

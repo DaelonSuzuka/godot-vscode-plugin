@@ -110,6 +110,18 @@ position = Vector2(1, 2)
 		assert.strictEqual(scene.externalResources.get("1")?.line, 1);
 	});
 
+	test("embedded Object(...) values with key:value arguments", () => {
+		const src = `[sub_resource type="AnimationNodeStateMachineTransition" id="t1"]
+advance_condition = Object(StringName,"name":"is_running")
+input = Object(InputEventKey,"resource_local_to_scene":false,"keycode":32,"pressed":true)
+
+[node name="Root" type="Node2D"]
+`;
+		const scene = interpret_scene(src);
+		assert.isTrue(scene.subResources.has("t1"));
+		assert.isTrue(scene.nodes.has("Root"));
+	});
+
 	test("connections and editable sections are tolerated", () => {
 		const src = `[node name="Root" type="Node2D"]
 [connection signal="pressed" from="." to="." method="_on_pressed"]
