@@ -48,8 +48,66 @@ export interface TscnSection {
 	header: string;
 }
 
+/** absolute source offsets (canonical coordinate space; VS Code converts
+ * via positionAt/offsetAt) plus the 0-based line of the start for cheap
+ * line-fragment links */
+export interface Span {
+	start: number;
+	end: number;
+	line: number;
+}
+
+/** an ExtResource("id") / SubResource("id") usage site */
+export interface ResourceReference {
+	kind: "ext" | "sub";
+	id: string;
+	span: Span;
+}
+
+/** a res:// or uid:// string literal anywhere in the file */
+export interface PathString {
+	value: string;
+	span: Span;
+}
+
+/** Position-queryable index accumulated as a side channel during parsing.
+ * Arrays are in source order (the parse is a single forward scan), so point
+ * queries are binary searches. The value model stays plain JS — spans live
+ * here, not on values. */
+export interface TscnIndex {
+	references: ResourceReference[];
+	paths: PathString[];
+}
+
+/** binary search for the entry whose span contains `offset` */
+function span_at<T extends { span: Span }>(entries: T[], offset: number): T | undefined {
+	let lo = 0;
+	let hi = entries.length - 1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		const s = entries[mid].span;
+		if (offset < s.start) {
+			hi = mid - 1;
+		} else if (offset >= s.end) {
+			lo = mid + 1;
+		} else {
+			return entries[mid];
+		}
+	}
+	return undefined;
+}
+
+export function reference_at(index: TscnIndex, offset: number): ResourceReference | undefined {
+	return span_at(index.references, offset);
+}
+
+export function path_at(index: TscnIndex, offset: number): PathString | undefined {
+	return span_at(index.paths, offset);
+}
+
 export interface TscnParseResult {
 	sections: TscnSection[];
+	index: TscnIndex;
 	/** non-fatal problems encountered (file still parsed) */
 	warnings: string[];
 }
@@ -61,6 +119,7 @@ export class TscnParser {
 	private pos = 0;
 	private line = 0;
 	private warnings: string[] = [];
+	private index: TscnIndex = { references: [], paths: [] };
 
 	constructor(source: string) {
 		this.src = source;
@@ -96,7 +155,7 @@ export class TscnParser {
 		if (sections.length > 0) {
 			sections[sections.length - 1].endOffset = this.src.length;
 		}
-		return { sections, warnings: this.warnings };
+		return { sections, index: this.index, warnings: this.warnings };
 	}
 
 	// --- cursor ---
@@ -231,11 +290,19 @@ export class TscnParser {
 		this.skip_trivia();
 		const c = this.peek();
 		if (c === '"') {
-			return this.parse_string();
+			const start = this.pos;
+			const line = this.line;
+			const value = this.parse_string();
+			this.record_path(value, start, line);
+			return value;
 		}
 		if (c === "&" && this.peek(1) === '"') {
+			const start = this.pos;
+			const line = this.line;
 			this.advance(); // StringName prefix
-			return this.parse_string();
+			const value = this.parse_string();
+			this.record_path(value, start, line);
+			return value;
 		}
 		if (c === "[") {
 			return this.parse_array();
@@ -324,7 +391,30 @@ export class TscnParser {
 		return Number.parseFloat(text);
 	}
 
+	private record_path(value: string, start: number, line: number) {
+		if (value.startsWith("res://") || value.startsWith("uid://")) {
+			this.index.paths.push({ value, span: { start, end: this.pos, line } });
+		}
+	}
+
+	/** index ExtResource/SubResource usage sites as the calls are parsed */
+	private finish_call(name: string, args: TscnValue[], start: number, line: number): TscnCall {
+		if ((name === "ExtResource" || name === "SubResource") && args.length > 0) {
+			const id = args[0];
+			if (typeof id === "string" || typeof id === "number") {
+				this.index.references.push({
+					kind: name === "ExtResource" ? "ext" : "sub",
+					id: String(id),
+					span: { start, end: this.pos, line },
+				});
+			}
+		}
+		return { kind: "call", name, args };
+	}
+
 	private parse_ident_or_call(): TscnValue {
+		const start = this.pos;
+		const startLine = this.line;
 		let name = "";
 		while (/[A-Za-z0-9_]/.test(this.peek())) {
 			name += this.advance();
@@ -352,7 +442,7 @@ export class TscnParser {
 			this.skip_trivia();
 			if (this.peek() === ")") {
 				this.advance();
-				return { kind: "call", name, args };
+				return this.finish_call(name, args, start, startLine);
 			}
 			for (;;) {
 				args.push(this.parse_value());
@@ -366,7 +456,7 @@ export class TscnParser {
 				}
 				const c = this.advance();
 				if (c === ")") {
-					return { kind: "call", name, args };
+					return this.finish_call(name, args, start, startLine);
 				}
 				if (c !== ",") {
 					throw this.error(`expected ',' or ')' in ${name}(...)`);

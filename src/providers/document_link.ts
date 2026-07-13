@@ -1,15 +1,16 @@
 import * as vscode from "vscode";
 import {
-	Uri,
-	Range,
-	Position,
-	type TextDocument,
 	type CancellationToken,
 	DocumentLink,
 	type DocumentLinkProvider,
 	type ExtensionContext,
+	Position,
+	Range,
+	type TextDocument,
+	Uri,
 } from "vscode";
 import { SceneParser } from "../scene_tools";
+import type { Span } from "../tscn/parser";
 import { convert_resource_path_to_uri, convert_uids_to_uris, createLogger } from "../utils";
 
 const log = createLogger("providers.document_links");
@@ -23,80 +24,94 @@ export class GDDocumentLinkProvider implements DocumentLinkProvider {
 			{ language: "gdscene", scheme: "file" },
 			{ language: "gdscript", scheme: "file" },
 		];
-		context.subscriptions.push(
-			vscode.languages.registerDocumentLinkProvider(selector, this),
-		);
+		context.subscriptions.push(vscode.languages.registerDocumentLinkProvider(selector, this));
 	}
 
 	async provideDocumentLinks(document: TextDocument, token: CancellationToken): Promise<DocumentLink[]> {
-		const scene = this.parser.parse_scene(document);
-		const text = document.getText();
-		const path = document.uri.fsPath;
+		if (["gdresource", "gdscene"].includes(document.languageId)) {
+			return this.scene_links(document);
+		}
+		return this.text_links(document);
+	}
 
+	/** scene files: everything comes from the parser's position index */
+	private async scene_links(document: TextDocument): Promise<DocumentLink[]> {
+		const scene = this.parser.parse_scene(document);
 		const links: DocumentLink[] = [];
 
-		if (["gdresource", "gdscene"].includes(document.languageId)) {
-			for (const match of text.matchAll(/ExtResource\(\s?"?(\w+)\s?"?\)/g)) {
-				const id = match[1];
-				const uri = Uri.from({
-					scheme: "file",
-					path: path,
-					fragment: `${scene.externalResources.get(id)?.line},0`,
-				});
-
-				const r = this.create_range(document, match);
-				const link = new DocumentLink(r, uri);
-				link.tooltip = "Jump to resource definition";
-				links.push(link);
+		for (const ref of scene.index.references) {
+			const definition =
+				ref.kind === "ext" ? scene.externalResources.get(ref.id) : scene.subResources.get(ref.id);
+			if (!definition) {
+				continue;
 			}
+			const uri = Uri.from({
+				scheme: "file",
+				path: document.uri.fsPath,
+				fragment: `${definition.line},0`,
+			});
+			const link = new DocumentLink(this.span_range(document, ref.span), uri);
+			link.tooltip = "Jump to resource definition";
+			links.push(link);
+		}
 
-			for (const match of text.matchAll(/SubResource\(\s?"?(\w+)\s?"?\)/g)) {
-				const id = match[1];
-				const uri = Uri.from({
-					scheme: "file",
-					path: path,
-					fragment: `${scene.subResources.get(id)?.line},0`,
-				});
-
-				const r = this.create_range(document, match);
-				const link = new DocumentLink(r, uri);
-				links.push(link);
+		const uids = new Set<string>();
+		for (const p of scene.index.paths) {
+			if (p.value.startsWith("uid://")) {
+				uids.add(p.value);
 			}
 		}
-		for (const match of text.matchAll(/res:\/\/([^"'\n]*)/g)) {
-			const r = this.create_range(document, match);
-			const uri = await convert_resource_path_to_uri(match[0]);
+		const uidMap = await convert_uids_to_uris(Array.from(uids));
+
+		for (const p of scene.index.paths) {
+			// the span covers the quoted literal; link just the path text
+			const range = this.span_range(document, p.span, 1);
+			const uri = p.value.startsWith("res://")
+				? await convert_resource_path_to_uri(p.value)
+				: uidMap.get(p.value);
 			if (uri instanceof Uri) {
-				links.push(new DocumentLink(r, uri));
+				links.push(new DocumentLink(range, uri));
 			}
 		}
-
-		const uids: Set<string> = new Set();
-		const uid_matches: Array<[string, Range]> = [];
-		for (const match of text.matchAll(/uid:\/\/([0-9a-z]*)/g)) {
-			const r = this.create_range(document, match);
-			uids.add(match[0]);
-			uid_matches.push([match[0], r]);
-		}
-
-		const uid_map = await convert_uids_to_uris(Array.from(uids));
-		for (const uid of uid_matches) {
-			const uri = uid_map.get(uid[0]);
-			if (uri instanceof vscode.Uri) {
-				links.push(new DocumentLink(uid[1], uri));
-			}
-		}
-
 		return links;
 	}
 
-	private create_range(document: TextDocument, match: RegExpMatchArray) {
+	/** gdscript (no scene structure): plain text scan */
+	private async text_links(document: TextDocument): Promise<DocumentLink[]> {
+		const text = document.getText();
+		const links: DocumentLink[] = [];
+
+		for (const match of text.matchAll(/res:\/\/([^"'\n]*)/g)) {
+			const uri = await convert_resource_path_to_uri(match[0]);
+			if (uri instanceof Uri) {
+				links.push(new DocumentLink(this.match_range(document, match), uri));
+			}
+		}
+
+		const uids = new Set<string>();
+		const uidMatches: Array<[string, Range]> = [];
+		for (const match of text.matchAll(/uid:\/\/([0-9a-z]*)/g)) {
+			uids.add(match[0]);
+			uidMatches.push([match[0], this.match_range(document, match)]);
+		}
+		const uidMap = await convert_uids_to_uris(Array.from(uids));
+		for (const [uid, range] of uidMatches) {
+			const uri = uidMap.get(uid);
+			if (uri instanceof vscode.Uri) {
+				links.push(new DocumentLink(range, uri));
+			}
+		}
+		return links;
+	}
+
+	private span_range(document: TextDocument, span: Span, shrink = 0): Range {
+		return new Range(document.positionAt(span.start + shrink), document.positionAt(span.end - shrink));
+	}
+
+	private match_range(document: TextDocument, match: RegExpMatchArray): Range {
 		if (match.index === undefined) {
 			return new Range(new Position(0, 0), new Position(0, 0));
 		}
-		const start = document.positionAt(match.index);
-		const end = document.positionAt(match.index + match[0].length);
-		const r = new Range(start, end);
-		return r;
+		return new Range(document.positionAt(match.index), document.positionAt(match.index + match[0].length));
 	}
 }

@@ -62,6 +62,7 @@ export class SceneParser {
 		for (const warning of data.warnings) {
 			log.debug(`${filePath}: ${warning}`);
 		}
+		scene.index = data.index;
 
 		for (const [id, res] of data.externalResources) {
 			scene.externalResources.set(id, { ...res, index: res.offset });

@@ -88,8 +88,7 @@ export class ScenePreviewProvider implements TreeDataProvider<SceneNode>, TreeDr
 		data: vscode.DataTransfer,
 		token: vscode.CancellationToken,
 	): void | Thenable<void> {
-		if (source.length === 0)
-			return;
+		if (source.length === 0) return;
 		data.set("godot/scene", new vscode.DataTransferItem(this.currentScene));
 		data.set("godot/node", new vscode.DataTransferItem(source[0]));
 		data.set("godot/path", new vscode.DataTransferItem(source[0].path));
@@ -202,11 +201,9 @@ export class ScenePreviewProvider implements TreeDataProvider<SceneNode>, TreeDr
 	private async open_script(item: SceneNode) {
 		if (this.scene && item.scriptId) {
 			const resource = this.scene.externalResources.get(item.scriptId);
-			if (!resource)
-				return;
+			if (!resource) return;
 			const uri = await convert_resource_path_to_uri(resource.path);
-			if (!uri)
-				return;
+			if (!uri) return;
 			vscode.window.showTextDocument(uri, { preview: true });
 		}
 	}
@@ -260,12 +257,41 @@ export class ScenePreviewProvider implements TreeDataProvider<SceneNode>, TreeDr
 			}
 			return [this.scene.root];
 		}
+		if (element.children.length === 0 && this.can_expand_instance(element)) {
+			await this.graft_instanced_scene(element);
+		}
 		return element.children;
+	}
+
+	private can_expand_instance(element: SceneNode): boolean {
+		return element.resourcePath?.endsWith(".tscn") && element.graftDepth < 16;
+	}
+
+	/** resolve an instanced node's target scene and graft its tree (cloned —
+	 * tree items must be unique and cached scenes must stay unmutated) */
+	private async graft_instanced_scene(element: SceneNode) {
+		try {
+			const uri = await convert_resource_path_to_uri(element.resourcePath);
+			if (!uri) {
+				return;
+			}
+			const document = await vscode.workspace.openTextDocument(uri);
+			const target = this.parser.parse_scene(document);
+			if (target.root) {
+				element.children = target.root.children.map((c) => c.clone(element.graftDepth + 1));
+			}
+		} catch (e) {
+			log.warn(`failed to expand instanced scene ${element.resourcePath}: ${e}`);
+		}
 	}
 
 	public getTreeItem(element: SceneNode): TreeItem | Thenable<TreeItem> {
 		if (element.children.length > 0) {
 			element.collapsibleState = TreeItemCollapsibleState.Expanded;
+		} else if (this.can_expand_instance(element)) {
+			// instanced scene: expandable on demand, collapsed so that
+			// instance cycles stay finite (each level is a user click)
+			element.collapsibleState = TreeItemCollapsibleState.Collapsed;
 		} else {
 			element.collapsibleState = TreeItemCollapsibleState.None;
 		}

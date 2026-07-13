@@ -1,7 +1,7 @@
 // Scene-level interpretation of a parsed .tscn/.tres file — vscode-free.
 // Produces plain data; src/scene_tools adapts it to VS Code TreeItems.
 
-import { parse_tscn, type TscnCall, type TscnSection, type TscnValue } from "./parser";
+import { parse_tscn, type TscnCall, type TscnIndex, type TscnSection, type TscnValue } from "./parser";
 
 export interface ResourceData {
 	id: string;
@@ -38,6 +38,7 @@ export interface NodeData {
 
 export interface SceneData {
 	rootPath: string;
+	index: TscnIndex;
 	nodes: Map<string, NodeData>;
 	externalResources: Map<string, ResourceData>;
 	subResources: Map<string, ResourceData>;
@@ -78,9 +79,10 @@ function make_resource(section: TscnSection, source: string): ResourceData {
 }
 
 export function interpret_scene(source: string): SceneData {
-	const { sections, warnings } = parse_tscn(source);
+	const { sections, index, warnings } = parse_tscn(source);
 	const scene: SceneData = {
 		rootPath: "",
+		index,
 		nodes: new Map(),
 		externalResources: new Map(),
 		subResources: new Map(),

@@ -3,7 +3,7 @@
 import { assert } from "chai";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { parse_tscn } from "./parser";
+import { parse_tscn, path_at, reference_at } from "./parser";
 import { interpret_scene } from "./scene";
 
 suite("tscn parser: sections and values", () => {
@@ -150,6 +150,56 @@ input = Object(InputEventKey,"resource_local_to_scene":false,"keycode":32,"press
 `;
 		const scene = interpret_scene(src);
 		assert.isTrue(scene.nodes.has("Root"));
+	});
+});
+
+suite("tscn parser: position index", () => {
+	const src = `[gd_scene format=3]
+[ext_resource type="Script" path="res://player one.gd" id="1_a"]
+[node name="Root" type="Node2D"]
+script = ExtResource("1_a")
+mat = SubResource("m1")
+paths = ["res://a.png", "uid://b3xyz"]
+`;
+
+	test("reference usage sites are indexed with exact spans", () => {
+		const { index } = parse_tscn(src);
+		assert.lengthOf(index.references, 2);
+		const [ext, sub] = index.references;
+		assert.strictEqual(ext.kind, "ext");
+		assert.strictEqual(ext.id, "1_a");
+		assert.strictEqual(src.slice(ext.span.start, ext.span.end), 'ExtResource("1_a")');
+		assert.strictEqual(sub.kind, "sub");
+		assert.strictEqual(src.slice(sub.span.start, sub.span.end), 'SubResource("m1")');
+		assert.strictEqual(src.split("\n")[ext.span.line], 'script = ExtResource("1_a")');
+	});
+
+	test("res:// and uid:// strings are indexed, including header attributes", () => {
+		const { index } = parse_tscn(src);
+		assert.deepEqual(
+			index.paths.map((p) => p.value),
+			["res://player one.gd", "res://a.png", "uid://b3xyz"],
+		);
+		for (const p of index.paths) {
+			// span covers the quoted literal
+			assert.strictEqual(src.slice(p.span.start + 1, p.span.end - 1), p.value);
+		}
+	});
+
+	test("point queries by offset", () => {
+		const { index } = parse_tscn(src);
+		const offset = src.indexOf('ExtResource("1_a")') + 5;
+		assert.strictEqual(reference_at(index, offset)?.id, "1_a");
+		assert.isUndefined(reference_at(index, 0));
+		const pathOffset = src.indexOf("res://a.png");
+		assert.strictEqual(path_at(index, pathOffset)?.value, "res://a.png");
+	});
+
+	test("numbers do not bloat the index", () => {
+		const big = `[sub_resource type="X" id="t"]\ndata = PackedInt32Array(${Array.from({ length: 1000 }, (_, i) => i).join(", ")})\n`;
+		const { index } = parse_tscn(big);
+		assert.lengthOf(index.references, 0);
+		assert.lengthOf(index.paths, 0);
 	});
 });
 

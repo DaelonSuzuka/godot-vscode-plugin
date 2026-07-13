@@ -1,10 +1,6 @@
-import {
-	TreeItem,
-	TreeItemCollapsibleState,
-	MarkdownString,
-	Uri
-} from "vscode";
+import { TreeItem, TreeItemCollapsibleState, MarkdownString, Uri } from "vscode";
 import * as path from "node:path";
+import type { TscnIndex } from "../tscn/parser";
 import { get_extension_uri } from "../utils";
 
 const iconDir = get_extension_uri("resources", "godot_icons").fsPath;
@@ -21,11 +17,37 @@ export class SceneNode extends TreeItem {
 	public hasScript = false;
 	public scriptId = "";
 	public children: SceneNode[] = [];
+	/** how many instanced-scene grafts deep this node lives (0 = own scene) */
+	public graftDepth = 0;
+
+	/** deep-copy for grafting an instanced scene's tree under another scene's
+	 * node — tree items must be unique objects, and cached scenes must not
+	 * have their nodes mutated by the view */
+	public clone(depth: number): SceneNode {
+		const copy = new SceneNode(this.label, this.className);
+		copy.path = this.path;
+		copy.relativePath = this.relativePath;
+		copy.resourcePath = this.resourcePath;
+		copy.parent = this.parent;
+		copy.text = this.text;
+		copy.position = this.position;
+		copy.body = this.body;
+		copy.unique = this.unique;
+		copy.hasScript = this.hasScript;
+		copy.scriptId = this.scriptId;
+		copy.description = this.description;
+		copy.tooltip = this.tooltip;
+		copy.contextValue = this.contextValue;
+		copy.resourceUri = this.resourceUri;
+		copy.graftDepth = depth;
+		copy.children = this.children.map((c) => c.clone(depth));
+		return copy;
+	}
 
 	constructor(
 		public label: string,
 		public className: string,
-		public collapsibleState?: TreeItemCollapsibleState
+		public collapsibleState?: TreeItemCollapsibleState,
 	) {
 		super(label, collapsibleState);
 
@@ -79,6 +101,7 @@ export class Scene {
 	public title: string;
 	public mtime: number;
 	public root: SceneNode | undefined;
+	public index: TscnIndex = { references: [], paths: [] };
 	public externalResources: Map<string, GDResource> = new Map();
 	public subResources: Map<string, GDResource> = new Map();
 	public nodes: Map<string, SceneNode> = new Map();
